@@ -4,6 +4,10 @@ const assert = require('assert');
 const redisess = require('..');
 const Redis = require('ioredis');
 const waterfall = require('putil-waterfall');
+const {rejects, doesNotReject} = require('rejected-or-not');
+
+assert.rejects = assert.rejects || rejects;
+assert.doesNotReject = assert.doesNotReject || doesNotReject;
 
 describe('SessionManager', function() {
 
