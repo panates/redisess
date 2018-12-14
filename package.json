@@ -1,7 +1,7 @@
 {
   "name": "redisess",
   "description": "Powerful redis session manager for NodeJS",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "author": "Panates Ltd.",
   "contributors": [
     "Eray Hanoglu <e.hanoglu@panates.com>"
