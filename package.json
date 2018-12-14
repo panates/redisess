@@ -1,0 +1,51 @@
+{
+  "name": "redisess",
+  "description": "Powerful redis session manager for NodeJS",
+  "version": "0.0.1",
+  "author": "Panates Ltd.",
+  "contributors": [
+    "Eray Hanoglu <e.hanoglu@panates.com>"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/panates/redisess.git"
+  },
+  "main": "lib/index.js",
+  "keywords": [
+    "javascript",
+    "session",
+    "redis"
+  ],
+  "dependencies": {
+    "errorex": "^2.0.3",
+    "putil-waterfall": "^2.1.1"
+  },
+  "devDependencies": {
+    "babel-eslint": "^10.0.1",
+    "eslint": "^5.9.0",
+    "eslint-config-google": "^0.11.0",
+    "nyc": "^13.1.0",
+    "mocha": "^5.2.0",
+    "ioredis": "^4.3.0"
+  },
+  "engines": {
+    "node": ">=6.0"
+  },
+  "directories": {
+    "lib": "./lib"
+  },
+  "files": [
+    "LICENSE",
+    "README.md",
+    "lib/"
+  ],
+  "nyc": {
+    "temp-dir": "./coverage/.nyc_output"
+  },
+  "scripts": {
+    "test": "mocha --require ./test/support/env --reporter spec --bail --check-leaks --testarg1=8081 test/",
+    "cover": "nyc --reporter html --reporter text npm run test",
+    "travis-cover": "nyc --reporter lcovonly npm run test"
+  }
+}
