@@ -228,12 +228,25 @@ describe('SessionManager', function() {
     ]);
   });
 
-  it('should create immutable session', function() {
-    return sm.create('user6', {ttl: 0}).then((sess) => {
-      assert(sess);
-      assert(sess.sessionId);
-      assert.strictEqual(sess.ttl, 0);
-    });
+  it('should create immortal session', function() {
+    sm._now = () => _now - 200;
+    let sid;
+    return waterfall([
+      () => sm.create('user6', {ttl: 0}).then((sess) => {
+        delete sm._now;
+        assert(sess);
+        assert(sess.sessionId);
+        assert.strictEqual(sess.ttl, 0);
+        assert.strictEqual(sess.expiresIn, 0);
+        sid = sess.sessionId;
+      }),
+
+      () => sm._wipe(),
+
+      () => sm.get(sid).then(sess => assert(sess))
+
+    ]);
+
   });
 
   it('should wipe periodically', function(done) {
