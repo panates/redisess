@@ -6,6 +6,8 @@ node_js:
   - "9"
   - "10"
 sudo: false
+services:
+  - redis-server
 cache:
   directories:
     - node_modules
