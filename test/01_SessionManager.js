@@ -57,6 +57,11 @@ describe('SessionManager', function() {
         /You must provide userId/);
   });
 
+  it('should countForUser() validate arguments', function() {
+    return assert.rejects(() => sm.countForUser(),
+        /You must provide userId/);
+  });
+
   it('should get() validate arguments', function() {
     return assert.rejects(() => sm.get(),
         /You must provide sessionId/);
@@ -116,6 +121,19 @@ describe('SessionManager', function() {
   it('should count() return active session count which active within given time', function() {
     return sm.count(40).then((c) => {
       assert.strictEqual(c, 4);
+    });
+  });
+
+
+  it('should countForUser() return session count of single user', function() {
+    return sm.countForUser('user1').then((c) => {
+      assert.strictEqual(c, 4);
+    });
+  });
+
+  it('should countForUser() return active session count of user which active within given time', function() {
+    return sm.countForUser('user1', 40).then((c) => {
+      assert.strictEqual(c, 3);
     });
   });
 
