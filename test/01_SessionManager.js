@@ -28,9 +28,9 @@ describe('SessionManager', function() {
 
   before(() => sm.killAll());
 
-  after((done) => {
-    redis.quit(done);
-  });
+  before(() => redis.script('flush'));
+
+  after(() => redis.quit());
 
   it('should constructor validate arguments', function() {
     assert.throws(() => {
@@ -95,12 +95,13 @@ describe('SessionManager', function() {
       sm._now = () => (t - (i * 10));
       return sm.create('user' + k, {ttl: 50}).then((sess) => {
         delete sm._now;
+        const t = i * 10 + 10;
         assert(sess);
         assert(sess.sessionId);
         assert.strictEqual(sess.userId, 'user' + k);
-        assert.strictEqual(sess.idle, i * 10 + 10);
+        assert(sess.idle >= t && sess.idle < t + 10, t);
         assert.strictEqual(sess.manager, sm);
-        assert.strictEqual(sess.expiresIn, 50 - (i * 10 + 10));
+        assert(sess.expiresIn <= 50 - t && sess.expiresIn > 50 - t - 10);
         sessionIds.push(sess.sessionId);
       });
     });
@@ -195,6 +196,52 @@ describe('SessionManager', function() {
             .then((b) => assert(!b)));
   });
 
+  it('should set values to session', function() {
+    return sm.get(sessionIds[sessionIds.length - 1]).then(session =>
+        session.set('val1', 123)
+            .then(r => assert.strictEqual(r, 1)));
+  });
+
+  it('should set map of values to session', function() {
+    return sm.get(sessionIds[sessionIds.length - 1]).then(session =>
+        session.set({
+          val2: '234',
+          val3: 'abc',
+          val4: new Date(0),
+          val5: Buffer.from('Hello World'),
+          val6: {a: 1, b: '2', c: 3.3}
+        })
+            .then(r => assert.strictEqual(r, 5)));
+  });
+
+  it('should get values from session', function() {
+    return sm.get(sessionIds[sessionIds.length - 1]).then(session =>
+        session.get('val1')
+            .then(v => assert.strictEqual(v, 123)));
+  });
+
+  it('should get array of values from session', function() {
+    return sm.get(sessionIds[sessionIds.length - 1]).then(session =>
+        session.get(['val1', 'val2', 'val3', 'val4', 'val5', 'val6'])
+            .then(v => assert.deepStrictEqual(v,
+                [123, '234', 'abc',
+                  new Date(0),
+                  Buffer.from('Hello World'),
+                  {a: 1, b: '2', c: 3.3}
+                ]
+            )));
+  });
+
+  it('should get map of values from session', function() {
+    return sm.get(sessionIds[sessionIds.length - 1]).then(session =>
+        session.get({val2: 0, val3: 0, val4: 0})
+            .then(v => assert.deepStrictEqual(v, {
+              val2: '234',
+              val3: 'abc',
+              val4: new Date(0)
+            })));
+  });
+
   it('should kill() remove session', function() {
     const sessionId = sessionIds.pop();
     return waterfall([
@@ -241,7 +288,7 @@ describe('SessionManager', function() {
         sid = sess.sessionId;
       }),
 
-      () => sm._wipe(),
+      //() => sm._wipe(),
 
       () => sm.get(sid).then(sess => assert(sess))
 
@@ -256,7 +303,7 @@ describe('SessionManager', function() {
     let k = 0;
     sm._wipe = () => {
       k++;
-      oldWipe.call(sm);
+      return oldWipe.call(sm);
     };
     sm._wipe();
     setTimeout(() => {
