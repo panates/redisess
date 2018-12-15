@@ -245,7 +245,7 @@ describe('SessionManager', function() {
   it('should kill() remove session', function() {
     const sessionId = sessionIds.pop();
     return waterfall([
-      () => sm.kill(sessionId).then((b) => assert(b)),
+      () => sm.kill(sessionId),
       () => sm.exists(sessionId).then((b) => assert(!b)),
       () => sm.get(sessionId).then((sess) => assert(!sess))
     ]);
@@ -256,7 +256,7 @@ describe('SessionManager', function() {
     return waterfall([
       () => sm.getUserSessions('user4').then(ids => {sessionId = ids[0];}),
       () => sm.exists(sessionId).then(b => assert.strictEqual(b, true)),
-      () => sm.killUser('user4').then(b => assert.strictEqual(b, true)),
+      () => sm.killUser('user4'),
       () => sm.exists(sessionId).then(b => assert.strictEqual(b, false))
     ]);
   });
