@@ -22,7 +22,8 @@ describe('SessionManager', function() {
     redis.once('error', done);
     sm = redisess(redis, 'myapp', {
       namespace: 'smtest',
-      wipeInterval: 60000
+      wipeInterval: 60000,
+      additionalFields: ['peerIp', 'userAgent']
     });
   });
 
@@ -98,17 +99,19 @@ describe('SessionManager', function() {
     let t = _now - 10;
     return waterfall.every([1, 1, 1, 2, 3, 2, 1, 4, 2, 5], (next, k, i) => {
       sm._now = () => (t - (i * 10));
-      return sm.create('user' + k, {ttl: 50}).then((sess) => {
-        delete sm._now;
-        const t = i * 10 + 10;
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.userId, 'user' + k);
-        assert(sess.idle >= t && sess.idle < t + 10, t);
-        assert.strictEqual(sess.manager, sm);
-        assert(sess.expiresIn <= 50 - t && sess.expiresIn > 50 - t - 10);
-        sessionIds.push(sess.sessionId);
-      });
+      return sm.create('user' + k, {ttl: 50, peerIp: '192.168.0.' + (i + 1)})
+          .then((sess) => {
+            delete sm._now;
+            const t = i * 10 + 10;
+            assert(sess);
+            assert(sess.sessionId);
+            assert.strictEqual(sess.userId, 'user' + k);
+            assert.strictEqual(sess.peerIp, '192.168.0.' + (i + 1));
+            assert(sess.idle >= t && sess.idle < t + 10, t);
+            assert.strictEqual(sess.manager, sm);
+            assert(sess.expiresIn <= 50 - t && sess.expiresIn > 50 - t - 10);
+            sessionIds.push(sess.sessionId);
+          });
     });
   });
 
@@ -123,7 +126,6 @@ describe('SessionManager', function() {
       assert.strictEqual(c, 4);
     });
   });
-
 
   it('should countForUser() return session count of single user', function() {
     return sm.countForUser('user1').then((c) => {
@@ -193,7 +195,8 @@ describe('SessionManager', function() {
     return sm.get(sessionIds[0], true).then((sess) => {
       assert(sess);
       assert(sess.sessionId);
-      assert(sess.userId = 'user2');
+      assert.strictEqual(sess.userId, 'user1');
+      assert.strictEqual(sess.peerIp, '192.168.0.1');
       assert(sess.idle > 0);
     });
   });
@@ -202,7 +205,8 @@ describe('SessionManager', function() {
     return sm.get(sessionIds[0]).then((sess) => {
       assert(sess);
       assert(sess.sessionId);
-      assert(sess.userId = 'user2');
+      assert.strictEqual(sess.userId, 'user1');
+      assert.strictEqual(sess.peerIp, '192.168.0.1');
       assert.strictEqual(sess.idle, 0);
     });
   });
