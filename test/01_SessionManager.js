@@ -20,7 +20,7 @@ describe('SessionManager', function() {
     redis = new Redis();
     redis.once('ready', done);
     redis.once('error', done);
-    sm = redisess(redis, 'myapp', {
+    sm = redisess(redis, {
       namespace: 'smtest',
       wipeInterval: 60000,
       additionalFields: ['peerIp', 'userAgent']
@@ -37,19 +37,16 @@ describe('SessionManager', function() {
     assert.throws(() => {
       redisess();
     }, /You must provide redis instance/);
-    assert.throws(() => {
-      redisess(redis);
-    }, /You must provide application name/);
     redisess(redis, 'myapp');
   });
 
   it('should set namespace while construct', function() {
-    const sm = redisess(redis, 'myapp', {namespace: 'abc'});
+    const sm = redisess(redis, {namespace: 'abc'});
     assert.strictEqual(sm.namespace, 'abc');
   });
 
   it('should set ttl while construct', function() {
-    const sm = redisess(redis, 'myapp', {ttl: 60});
+    const sm = redisess(redis, {ttl: 60});
     assert.strictEqual(sm._ttl, 60);
   });
 
