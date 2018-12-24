@@ -70,6 +70,11 @@ describe('SessionManager', function() {
         /You must provide userId/);
   });
 
+  it('should getOldestUserSession() validate arguments', function() {
+    return assert.rejects(() => sm.getOldestUserSession(),
+        /You must provide userId/);
+  });
+
   it('should exists() validate arguments', function() {
     return assert.rejects(() => sm.exists(),
         /You must provide sessionId/);
@@ -96,14 +101,14 @@ describe('SessionManager', function() {
     let t = _now - 10;
     return waterfall.every([1, 1, 1, 2, 3, 2, 1, 4, 2, 5], (next, k, i) => {
       sm._now = () => (t - (i * 10));
-      return sm.create('user' + k, {ttl: 50, peerIp: '192.168.0.' + (i + 1)})
+      return sm.create('user' + k, {ttl: 50, peerIp: '192.168.0.' + (11 - i)})
           .then((sess) => {
             delete sm._now;
             const t = i * 10 + 10;
             assert(sess);
             assert(sess.sessionId);
             assert.strictEqual(sess.userId, 'user' + k);
-            assert.strictEqual(sess.peerIp, '192.168.0.' + (i + 1));
+            assert.strictEqual(sess.peerIp, '192.168.0.' + (11-i));
             assert(sess.idle >= t && sess.idle < t + 10, t);
             assert.strictEqual(sess.manager, sm);
             assert(sess.expiresIn <= 50 - t && sess.expiresIn > 50 - t - 10);
@@ -164,6 +169,26 @@ describe('SessionManager', function() {
     });
   });
 
+  it('should getOldestUserSession() return oldest session of user without updating idle time', function() {
+    return sm.getOldestUserSession('user1', true).then(sess => {
+      assert(sess);
+      assert(sess.sessionId);
+      assert.strictEqual(sess.userId, 'user1');
+      assert.strictEqual(sess.peerIp, '192.168.0.5');
+      assert.strictEqual(sess.idle, 70);
+    });
+  });
+
+  it('should getOldestUserSession() return oldest session of user', function() {
+    return sm.getOldestUserSession('user1').then(sess => {
+      assert(sess);
+      assert(sess.sessionId);
+      assert.strictEqual(sess.userId, 'user1');
+      assert.strictEqual(sess.peerIp, '192.168.0.5');
+      assert.strictEqual(sess.idle, 0);
+    });
+  });
+
   it('should getAllUsers() return all user ids', function() {
     return sm.getAllUsers().then((users) => {
       assert(users);
@@ -174,7 +199,7 @@ describe('SessionManager', function() {
   it('should getAllUsers() return all user ids which active within given time', function() {
     return sm.getAllUsers(50).then((sessions) => {
       assert(sessions);
-      assert.strictEqual(Object.keys(sessions).length, 1);
+      assert.strictEqual(Object.keys(sessions).length, 2);
     });
   });
 
@@ -193,7 +218,7 @@ describe('SessionManager', function() {
       assert(sess);
       assert(sess.sessionId);
       assert.strictEqual(sess.userId, 'user1');
-      assert.strictEqual(sess.peerIp, '192.168.0.1');
+      assert.strictEqual(sess.peerIp, '192.168.0.11');
       assert(sess.idle > 0);
     });
   });
@@ -203,7 +228,7 @@ describe('SessionManager', function() {
       assert(sess);
       assert(sess.sessionId);
       assert.strictEqual(sess.userId, 'user1');
-      assert.strictEqual(sess.peerIp, '192.168.0.1');
+      assert.strictEqual(sess.peerIp, '192.168.0.11');
       assert.strictEqual(sess.idle, 0);
     });
   });
@@ -282,7 +307,7 @@ describe('SessionManager', function() {
 
   it('should wipe expired sessions', function() {
     return sm._wipe().then(() => {
-      return sm.count().then(c => assert.strictEqual(c, 5));
+      return sm.count().then(c => assert.strictEqual(c, 6));
     });
   });
 
