@@ -65,11 +65,11 @@ app.listen(3000);
 
 
 ---
-### SessionManager
+## SessionManager
 
 
 
-#### prototype.count()
+### prototype.count()
 
 Returns the number of sessions within the last n seconds. Get all session count if n is not defined or zero
 
@@ -81,8 +81,8 @@ Returns the number of sessions within the last n seconds. Get all session count 
 - *Return value :* Returns the number of sessions.
 
 
-
-#### prototype.countForUser()
+---
+### prototype.countForUser()
 
 Retrieves session count of single user which were active within the last n seconds.
 
@@ -95,8 +95,8 @@ Retrieves session count of single user which were active within the last n secon
 - *Return value :* Returns the number of sessions.
 
 
-
-#### prototype.create()
+---
+### prototype.create()
 
 Creates a new session for the user
 
@@ -111,28 +111,47 @@ Creates a new session for the user
 - *Return value :* Returns new created session.
 
 
-
+---
 #### prototype.get()
 
 
+---
 #### prototype.getAllSessions()
 
+
+---
 #### prototype.getAllUsers()
 
+
+---
 #### prototype.getUserSessions()
 
+
+---
 #### prototype.getOldestUserSession()
 
+
+---
 #### prototype.exists()
 
+
+---
 #### prototype.kill()
 
+
+---
 #### prototype.killUser()
 
+
+---
 #### prototype.killAll()
 
+
+---
 #### prototype.now()
 
+
+---
 #### prototype.quit()
 
 
@@ -140,35 +159,63 @@ Creates a new session for the user
 ---
 ## Session
 
-
+---
 #### prototype.sessionId
 
+
+---
 #### prototype.userId
 
+
+---
 #### prototype.ttl
 
+
+---
 #### prototype.lastAccess
 
+
+---
 #### prototype.expires
 
+
+---
 #### prototype.expiresIn
 
+
+---
 #### prototype.valid
 
+
+---
 #### prototype.idle
 
+
+---
 #### prototype.[additionalField]
 
+
+---
 #### prototype.read()
 
+
+---
 #### prototype.get()
 
+
+---
 #### prototype.set()
 
+
+---
 #### prototype.kill()
 
+
+---
 #### prototype.write()
 
+
+---
 #### prototype.write()
 
 
