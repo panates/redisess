@@ -5,6 +5,8 @@ node_js:
   - "12"
   - "stable"
 sudo: false
+services:
+  - redis
 cache:
   directories:
     - "$HOME/.npm"
