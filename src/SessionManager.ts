@@ -10,7 +10,6 @@ export namespace SessionManager {
         wipeInterval?: number;
         additionalFields?: string[];
     }
-
 }
 
 /**
@@ -368,6 +367,11 @@ export class SessionManager {
                     this._wipe().catch(/* istanbul ignore next */() => 1);
                 }, this._wipeInterval);
             this._wipeTimer.unref();
+        }
+        if (this._client.status !== 'ready') {
+            await new Promise(resolve => {
+                this._client.once('ready', resolve);
+            });
         }
         if (this._timediff == null)
             await this._syncTime(this._client);
