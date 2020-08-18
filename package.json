@@ -11,42 +11,58 @@
     "type": "git",
     "url": "https://github.com/panates/redisess.git"
   },
-  "main": "lib/index.js",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "keywords": [
     "javascript",
     "session",
     "redis"
   ],
-  "dependencies": {
-    "errorex": "^2.3.2",
-    "putil-waterfall": "^2.1.1"
+  "dependencies": {},
+  "peerDependencies": {
+    "ioredis": ">4.17.3"
   },
   "devDependencies": {
-    "babel-eslint": "^10.0.2",
-    "eslint": "^6.0.1",
-    "eslint-config-google": "^0.13.0",
-    "ioredis": "^4.11.2",
-    "mocha": "^6.1.4",
-    "nyc": "^14.1.1",
-    "rejected-or-not": "^1.0.1"
+    "@types/mocha": "^8.0.3",
+    "@types/node": "^14.6.0",
+    "@types/ioredis": "^4.17.3",
+    "@typescript-eslint/eslint-plugin": "^3.9.1",
+    "@typescript-eslint/parser": "^3.9.1",
+    "babel-eslint": "^10.1.0",
+    "eslint": "^7.7.0",
+    "eslint-config-google": "^0.14.0",
+    "mocha": "^8.1.1",
+    "nyc": "^15.1.0",
+    "ioredis": "^4.17.3",
+    "rejected-or-not": "^2.0.0",
+    "ts-cleanup": "^0.2.1",
+    "ts-loader": "^8.0.2",
+    "ts-node": "^8.6.2",
+    "tsconfig-paths": "^3.9.0",
+    "typescript": "^3.8.3"
   },
   "engines": {
-    "node": ">=6.0"
+    "node": ">=8.0"
   },
   "directories": {
-    "lib": "./lib"
+    "lib": "./dist"
   },
   "files": [
     "LICENSE",
     "README.md",
-    "lib/"
+    "dist/"
   ],
   "nyc": {
     "temp-dir": "./coverage/.nyc_output"
   },
   "scripts": {
-    "test": "mocha --require ./test/support/env --reporter spec --bail --check-leaks --testarg1=8081 test/",
-    "cover": "nyc --reporter html --reporter text npm run test",
+    "clean": "npm run clean:src && npm run clean:test && npm run clean:dist",
+    "clean:dist": "ts-cleanup -d dist --remove-dirs --all",
+    "clean:src": "ts-cleanup -s src --all",
+    "build": "npm run clean:dist | tsc -b tsconfig-build.json",
+    "compile": "tsc -b tsconfig.json",
+    "cover": "nyc --reporter=cobertura --reporter html --reporter text npm run test",
+    "test": "mocha --reporter spec test/*.test.js",
     "travis-cover": "nyc --reporter lcovonly npm run test"
   }
 }

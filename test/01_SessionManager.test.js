@@ -3,7 +3,6 @@ require('./support/env');
 const assert = require('assert');
 const redisess = require('..');
 const Redis = require('ioredis');
-const waterfall = require('putil-waterfall');
 const {rejects, doesNotReject} = require('rejected-or-not');
 
 assert.rejects = assert.rejects || rejects;
@@ -20,16 +19,17 @@ describe('SessionManager', function() {
     redis = new Redis();
     redis.once('ready', done);
     redis.once('error', done);
+  });
+
+  before(async function() {
     sm = redisess(redis, {
       namespace: 'smtest',
       wipeInterval: 60000,
       additionalFields: ['peerIp', 'userAgent']
     });
+    await sm.killAll();
+    await redis.script('flush');
   });
-
-  before(() => sm.killAll());
-
-  before(() => redis.script('flush'));
 
   after(() => redis.quit());
 
@@ -42,7 +42,7 @@ describe('SessionManager', function() {
 
   it('should set namespace while construct', function() {
     const sm = redisess(redis, {namespace: 'abc'});
-    assert.strictEqual(sm.namespace, 'abc');
+    assert.strictEqual(sm._ns, 'abc');
   });
 
   it('should set ttl while construct', function() {
@@ -97,24 +97,24 @@ describe('SessionManager', function() {
     });
   });
 
-  it('should create session', function() {
+  it('should create session', async function() {
     let t = _now - 10;
-    return waterfall.every([1, 1, 1, 2, 3, 2, 1, 4, 2, 5], (next, k, i) => {
+    for (const [i, k] of [1, 1, 1, 2, 3, 2, 1, 4, 2, 5].entries()) {
       sm._now = () => (t - (i * 10));
-      return sm.create('user' + k, {ttl: 50, peerIp: '192.168.0.' + (11 - i)})
-          .then((sess) => {
-            delete sm._now;
-            const t = i * 10 + 10;
-            assert(sess);
-            assert(sess.sessionId);
-            assert.strictEqual(sess.userId, 'user' + k);
-            assert.strictEqual(sess.peerIp, '192.168.0.' + (11-i));
-            assert(sess.idle >= t && sess.idle < t + 10, t);
-            assert.strictEqual(sess.manager, sm);
-            assert(sess.expiresIn <= 50 - t && sess.expiresIn > 50 - t - 10);
-            sessionIds.push(sess.sessionId);
-          });
-    });
+      const sess = await sm.create('user' + k, {
+        ttl: 50,
+        peerIp: '192.168.0.' + (11 - i)
+      });
+      delete sm._now;
+      const j = i * 10 + 10;
+      assert(sess);
+      assert(sess.sessionId);
+      assert.strictEqual(sess.userId, 'user' + k);
+      assert.strictEqual(sess.peerIp, '192.168.0.' + (11 - i));
+      assert(sess.idle >= j && sess.idle < j + 10, j);
+      assert(sess.expiresIn <= 50 - j && sess.expiresIn > 50 - j - 10);
+      sessionIds.push(sess.sessionId);
+    }
   });
 
   it('should count() return session count', function() {
@@ -286,23 +286,24 @@ describe('SessionManager', function() {
             })));
   });
 
-  it('should kill() remove session', function() {
+  it('should kill() remove session', async function() {
     const sessionId = sessionIds.pop();
-    return waterfall([
-      () => sm.kill(sessionId),
-      () => sm.exists(sessionId).then((b) => assert(!b)),
-      () => sm.get(sessionId).then((sess) => assert(!sess))
-    ]);
+    await sm.kill(sessionId);
+    const b = await await sm.exists(sessionId);
+    assert(!b);
+    const sess = await sm.get(sessionId);
+    assert(!sess);
   });
 
-  it('should killUser() remove all sessions of the user', function() {
+  it('should killUser() remove all sessions of the user', async function() {
     let sessionId;
-    return waterfall([
-      () => sm.getUserSessions('user4').then(ids => {sessionId = ids[0];}),
-      () => sm.exists(sessionId).then(b => assert.strictEqual(b, true)),
-      () => sm.killUser('user4'),
-      () => sm.exists(sessionId).then(b => assert.strictEqual(b, false))
-    ]);
+    const ids = await sm.getUserSessions('user4');
+    sessionId = ids[0];
+    let b = await sm.exists(sessionId);
+    assert.strictEqual(b, true);
+    await sm.killUser('user4');
+    b = await sm.exists(sessionId);
+    assert.strictEqual(b, false);
   });
 
   it('should wipe expired sessions', function() {
@@ -311,33 +312,26 @@ describe('SessionManager', function() {
     });
   });
 
-  it('should killAll() remove all sessions of the user', function() {
-    return waterfall([
-      () => sm.count().then(c => assert(c > 0)),
-      () => sm.killAll(),
-      () => sm.count().then(c => assert.strictEqual(c, 0))
-    ]);
+  it('should killAll() remove all sessions of the user', async function() {
+    let c = await sm.count();
+    assert(c > 0);
+    await sm.killAll();
+    c = await sm.count();
+    assert.strictEqual(c, 0);
   });
 
-  it('should create immortal session', function() {
+  it('should create immortal session', async function() {
     sm._now = () => _now - 200;
     let sid;
-    return waterfall([
-      () => sm.create('user6', {ttl: 0}).then((sess) => {
-        delete sm._now;
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.ttl, 0);
-        assert.strictEqual(sess.expiresIn, 0);
-        sid = sess.sessionId;
-      }),
-
-      //() => sm._wipe(),
-
-      () => sm.get(sid).then(sess => assert(sess))
-
-    ]);
-
+    const sess = await sm.create('user6', {ttl: 0});
+    delete sm._now;
+    assert(sess);
+    assert(sess.sessionId);
+    assert.strictEqual(sess.ttl, 0);
+    assert.strictEqual(sess.expiresIn, 0);
+    sid = sess.sessionId;
+    const sess2 = await sm.get(sid);
+    assert(sess2);
   });
 
   it('should wipe periodically', function(done) {
