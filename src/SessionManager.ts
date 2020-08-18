@@ -126,9 +126,8 @@ export class SessionManager {
     }
 
     /**
-     * Get the amount of sessions within the last n seconds.
-     * Get all session count if n is not defined or zero
-     * @param {number} [secs]
+     * Returns the number of sessions within the last n seconds.
+     * @param {number} [secs] The elapsed time since the last activity of the session. Returns total count of sessions If not defined or zero
      * @return {Promise<Number>}
      */
     async count(secs: number = 0): Promise<number> {
@@ -158,7 +157,7 @@ export class SessionManager {
     }
 
     /**
-     * Creates new session
+     * Creates a new session for the user
      *
      * @param {string} userId
      * @param {Object} [props]
@@ -213,7 +212,7 @@ export class SessionManager {
      * @param {number} [secs]
      * @return {Promise<Array<String>>}
      */
-    async getAllSession(secs: number): Promise<string[]> {
+    async getAllSessions(secs: number): Promise<string[]> {
         const client = await this._getClient();
         secs = Number(secs);
         return await client.zrevrangebyscore(this._ns + ':ACTIVITY',

@@ -141,15 +141,15 @@ describe('SessionManager', function() {
     });
   });
 
-  it('should getAllSession() return all session ids', function() {
-    return sm.getAllSession().then((sessions) => {
+  it('should getAllSessions() return all session ids', function() {
+    return sm.getAllSessions().then((sessions) => {
       assert(sessions);
       assert.strictEqual(Object.keys(sessions).length, 10);
     });
   });
 
-  it('should getAllSession() return all session ids  which active within given time', function() {
-    return sm.getAllSession(20).then((sessions) => {
+  it('should getAllSessions() return all session ids  which active within given time', function() {
+    return sm.getAllSessions(20).then((sessions) => {
       assert(sessions);
       assert.strictEqual(Object.keys(sessions).length, 2);
     });
