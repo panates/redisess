@@ -21,7 +21,7 @@ $ npm install redisess --save
 
 ## Node Compatibility
 
-  - node >= 6.x
+  - node >= 8.x
   
 ## Change log
 
