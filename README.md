@@ -252,63 +252,63 @@ Stops wipe timer
 ---
 #### prototype.sessionId
 
-Retrieves session id value
+Returns session id value
 
 `sessionId(): string`
 
 ---
 #### prototype.userId
 
-Retrieves user id value
+Returns user id value
 
 `userId(): string`
 
 ---
 #### prototype.ttl
 
-Retrieves Time-To-Live value
+Returns Time-To-Live value
 
 `ttl(): number`
 
 ---
 #### prototype.lastAccess
 
-Retrieves the time (unix) of last access
+Returns the time (unix) of last access
 
 `lastAccess(): number`
 
 ---
 #### prototype.expires
 
-Retrieves the time (unix) that session be expired.
+Returns the time (unix) that session be expired.
 
 `expires(): number`
 
 ---
 #### prototype.expiresIn
 
-Retrieves duration that session be expired.
+Returns duration that session be expired.
 
 `expiresIn(): number`
 
 ---
 #### prototype.valid
 
-Retrieves validation of session and user with last access control.
+Returns validation of session and user with last access control.
 
 `valid(): boolean`
 
 ---
 #### prototype.idle
 
-Retrieves idle duration in seconds.
+Returns idle duration in seconds.
 
 `idle(): number`
 
 ---
 #### prototype.[additionalField]
 
-Retrieves information of writed additional field.
+Returns any additional field value
 
 ---
 #### prototype.read()
