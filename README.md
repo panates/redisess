@@ -114,47 +114,137 @@ Creates a new session for the user
 ---
 #### prototype.get()
 
+Retrieves session by sessionId
+
+`get(sessionId: string, noUpdate: boolean = false): Promise<Session>`
+
+##### Parameters
+
+- sessionId: Id of the session
+- noUpdate: Update state of the session
+- *Return value :* Returns new created session.
 
 ---
 #### prototype.getAllSessions()
 
+Retrieves all session ids which were active within the last n seconds.
+
+`getAllSessions(secs: number): Promise<string[]>`
+
+##### Parameters
+
+- secs: The elapsed time since the last activity of the session. Returns total count of sessions If not defined or zero
+- *Return value :* Returns the string array of all sessions.
 
 ---
 #### prototype.getAllUsers()
 
+Retrieves all user ids which were active within the last n seconds.
+
+`getAllUsers(secs: number): Promise<string[]>`
+
+##### Parameters
+
+- secs: The elapsed time since the last activity of the session. Returns total count of sessions If not defined or zero
+- *Return value :* Returns the string array of all users.
 
 ---
 #### prototype.getUserSessions()
 
+Retrieves session ids of single user which were active within the last n seconds.
+
+`getUserSessions(userId: string, n: number = 0): Promise<string[]>`
+
+##### Parameters
+
+- userId: Id of the user
+- n: The elapsed time since the last activity of the session.
+- *Return value :* Returns the string array of all sessions for an user.
 
 ---
 #### prototype.getOldestUserSession()
 
+Retrieves oldest session of user
+
+`getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<Session>`
+
+##### Parameters
+
+- userId: Id of the user
+- noUpdate: Update state of the session
+- *Return value :* Returns new created session.
 
 ---
 #### prototype.exists()
 
+Returns true if sessionId exists, false otherwise
+
+`exists(sessionId: string): Promise<Boolean>`
+
+##### Parameters
+
+- sessionId: Id of the session
+- *Return value :* Returns Boolean.
 
 ---
 #### prototype.kill()
 
+Kills single session
+
+`kill(sessionId: string): Promise<void>`
+
+##### Parameters
+
+- sessionId: Id of the session
+- *Return value :* No return value.
 
 ---
 #### prototype.killUser()
 
+ Kills all sessions of user
+
+ `killUser(userId: string): Promise<void>`
+
+ ##### Parameters
+
+- userId: Id of the user
+- *Return value :* No return value.
 
 ---
 #### prototype.killAll()
 
+ Kills all sessions for application
+
+ `killAll(): Promise<void>`
+
+ ##### Parameters
+
+- No parameter value
+- *Return value :* No return value.
 
 ---
 #### prototype.now()
 
+Retrieves present time.
+
+`now(): Promise<number>`
+
+ ##### Parameters
+
+- No parameter value
+- *Return value :* Returns number.
 
 ---
 #### prototype.quit()
 
+Stops wipe timer
 
+`quit(): void`
+
+##### Parameters
+
+- No parameter value
+- *Return value :* No return value.
 
 ---
 ## Session
@@ -162,62 +252,111 @@ Creates a new session for the user
 ---
 #### prototype.sessionId
 
+Retrieves session id value
+
+`sessionId(): string`
 
 ---
 #### prototype.userId
 
+Retrieves user id value
+
+`userId(): string`
 
 ---
 #### prototype.ttl
 
+Retrieves Time-To-Live value
+
+`ttl(): number`
 
 ---
 #### prototype.lastAccess
 
+Retrieves the time (unix) of last access
+
+`lastAccess(): number`
 
 ---
 #### prototype.expires
 
+Retrieves the time (unix) that session be expired.
+
+`expires(): number`
 
 ---
 #### prototype.expiresIn
 
+Retrieves duration that session be expired.
+
+`expiresIn(): number`
 
 ---
 #### prototype.valid
 
+Retrieves validation of session and user with last access control.
+
+`valid(): boolean`
 
 ---
 #### prototype.idle
 
+Retrieves idle duration in seconds.
+
+`idle(): number`
 
 ---
 #### prototype.[additionalField]
 
+Retrieves information of writed additional field.
 
 ---
 #### prototype.read()
 
+Reads session info from redis server
+
+`read(): Promise<void>`
 
 ---
 #### prototype.get()
 
+Retrieves user data from session.
+
+`get(key): Promise<any>`
+
+ ##### Parameters
+
+- key: string | Array<String> | Object<String,*>
+- *Return value :* No return value.
 
 ---
 #### prototype.set()
 
+Stores user data to session
+
+`set(key, value): Promise<number>`
+
+##### Parameters
+
+- key: string | Object
+- value: *
+- *Return value :* Length of values.
 
 ---
 #### prototype.kill()
 
+Kills the session
+
+`kill(): Promise<void>`
 
 ---
 #### prototype.write()
 
+Write session to redis server.
+
+`write(): Promise<void>`
 
 ---
-#### prototype.write()
-
 
 ## Node Compatibility
 
