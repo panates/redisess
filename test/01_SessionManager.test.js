@@ -17,8 +17,13 @@ describe('SessionManager', function() {
 
   before((done) => {
     redis = new Redis();
-    redis.once('ready', done);
-    redis.once('error', done);
+    const callDone = () => {
+      redis.removeListener('ready', done);
+      redis.removeListener('error', done);
+      done();
+    };
+    redis.once('ready', callDone);
+    redis.once('error', callDone);
   });
 
   before(async function() {
@@ -31,7 +36,9 @@ describe('SessionManager', function() {
     await redis.script('flush');
   });
 
-  after(() => redis.quit());
+  after(async () => {
+    await redis.disconnect();
+  });
 
   it('should constructor validate arguments', function() {
     assert.throws(() => {
@@ -350,7 +357,7 @@ describe('SessionManager', function() {
       if (k > 5)
         return done();
       done(new Error('Failed'));
-    }, 100);
+    }, 100).unref();
   });
 
 });
