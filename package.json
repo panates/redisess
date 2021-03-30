@@ -18,22 +18,21 @@
     "session",
     "redis"
   ],
-  "dependencies": {},
   "peerDependencies": {
     "ioredis": "^4.x.x"
   },
   "devDependencies": {
+    "@types/ioredis": "^4.17.6",
     "@types/mocha": "^8.0.3",
     "@types/node": "^14.14.2",
-    "@types/ioredis": "^4.17.6",
     "@typescript-eslint/eslint-plugin": "^4.5.0",
     "@typescript-eslint/parser": "^4.5.0",
     "babel-eslint": "^10.1.0",
     "eslint": "^7.12.0",
     "eslint-config-google": "^0.14.0",
+    "ioredis": "^4.19.0",
     "mocha": "^8.2.0",
     "nyc": "^15.1.0",
-    "ioredis": "^4.19.0",
     "rejected-or-not": "^2.0.0",
     "ts-cleanup": "^0.2.2",
     "ts-loader": "^8.0.7",
