@@ -1,4 +1,3 @@
-
 export class RedisScript {
     private readonly _src: string;
     private readonly _numberOfKeys: number;
@@ -6,7 +5,7 @@ export class RedisScript {
 
     constructor(src: string, numberOfKeys?: number) {
         this._src = src;
-        this._sha = null;
+        this._sha = '';
         this._numberOfKeys = numberOfKeys || 0;
     }
 
@@ -20,7 +19,7 @@ export class RedisScript {
             if (!String(err).includes('NOSCRIPT'))
                 throw err;
             // Retry
-            this._sha = null;
+            this._sha = '';
             return await this._execute(client, ...args);
         }
     }

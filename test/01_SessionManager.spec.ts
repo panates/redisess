@@ -1,12 +1,8 @@
 /* eslint-disable */
-require('./support/env');
-const assert = require('assert');
-const redisess = require('..');
-const Redis = require('ioredis');
-const {rejects, doesNotReject} = require('rejected-or-not');
-
-assert.rejects = assert.rejects || rejects;
-assert.doesNotReject = assert.doesNotReject || doesNotReject;
+import './support/env';
+import assert from 'assert';
+import {SessionManager} from '../src';
+import Redis from 'ioredis';
 
 describe('SessionManager', function() {
 
@@ -27,7 +23,7 @@ describe('SessionManager', function() {
   });
 
   before(async function() {
-    sm = redisess(redis, {
+    sm = new SessionManager(redis, {
       namespace: 'smtest',
       wipeInterval: 60000,
       additionalFields: ['peerIp', 'userAgent']
@@ -42,19 +38,21 @@ describe('SessionManager', function() {
 
   it('should constructor validate arguments', function() {
     assert.throws(() => {
-      redisess();
+      // @ts-ignore
+      new SessionManager();
     }, /You must provide redis instance/);
-    redisess(redis, 'myapp');
+    // @ts-ignore
+    new SessionManager(redis, 'myapp');
   });
 
   it('should set namespace while construct', function() {
-    const sm = redisess(redis, {namespace: 'abc'});
-    assert.strictEqual(sm._ns, 'abc');
+    const sm = new SessionManager(redis, {namespace: 'abc'});
+    assert.strictEqual(sm.namespace, 'abc');
   });
 
   it('should set ttl while construct', function() {
-    const sm = redisess(redis, {ttl: 60});
-    assert.strictEqual(sm._ttl, 60);
+    const sm = new SessionManager(redis, {ttl: 60});
+    assert.strictEqual(sm.ttl, 60);
   });
 
   it('should create() validate arguments', function() {
@@ -118,7 +116,7 @@ describe('SessionManager', function() {
       assert(sess.sessionId);
       assert.strictEqual(sess.userId, 'user' + k);
       assert.strictEqual(sess.peerIp, '192.168.0.' + (11 - i));
-      assert(sess.idle >= j && sess.idle < j + 10, j);
+      assert(sess.idle >= j && sess.idle < j + 10);
       assert(sess.expiresIn <= 50 - j && sess.expiresIn > 50 - j - 10);
       sessionIds.push(sess.sessionId);
     }

@@ -30,9 +30,9 @@ export class Session {
     private readonly _manager: SessionManagerAccess;
     private readonly _sessionId: string;
     private _userId: string;
-    private _ttl?: number;
-    private _lastAccess?: number;
-    private _expires?: number;
+    private _ttl: number;
+    private _lastAccess: number;
+    private _expires: number;
 
     /**
      *
@@ -46,7 +46,7 @@ export class Session {
     constructor(manager: SessionManager, opts: Session.Options) {
         this._manager = manager as unknown as SessionManagerAccess;
         this._sessionId = opts.sessionId;
-        this._userId = opts.userId;
+        this._userId = opts.userId || '';
         this._ttl = opts.ttl || 0;
         this._lastAccess = 0;
         this._expires = 0;
@@ -136,7 +136,7 @@ export class Session {
                 args.push('f' + i);
         }
         const resp = await client.hmget(sessKey, ...args);
-        this._userId = resp[0];
+        this._userId = resp[0] || '';
         this._lastAccess = Number(resp[1]) || 0;
         this._expires = Number(resp[2]) || 0;
         this._ttl = Number(resp[3]) || 0;
@@ -284,7 +284,7 @@ export class Session {
                 return 'o' + zlib.deflateSync(JSON.stringify(v)).toString('base64');
             return 's' + String(v);
         };
-        let values = [];
+        let values: string[] = [];
         if (typeof key === 'object') {
             for (const k of Object.keys(key)) {
                 values.push('$' + k);

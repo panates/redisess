@@ -21,13 +21,13 @@ export class SessionManager {
     private readonly _ns?: string;
     private readonly _ttl?: number;
     private readonly _additionalFields?: string[];
-    private readonly _killScript?: RedisScript;
-    private readonly _writeScript?: RedisScript;
-    private readonly _wipeScript?: RedisScript;
-    private readonly _killAllScript?: RedisScript;
+    private readonly _killScript: RedisScript;
+    private readonly _writeScript: RedisScript;
+    private readonly _wipeScript: RedisScript;
+    private readonly _killAllScript: RedisScript;
     private _wipeTimer?: NodeJS.Timeout;
     private _wipeInterval?: number;
-    private _timediff: number;
+    private _timeDiff: number;
 
     /**
      *
@@ -46,9 +46,8 @@ export class SessionManager {
             Object.freeze(props.additionalFields) as string[] : undefined;
         this._ns = (props.namespace || 'sessions');
         this._ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : (30 * 60);
-        this._timediff = null;
+        this._timeDiff = 0;
         this._wipeInterval = props.wipeInterval || 1000;
-        this._wipeTimer = null;
         client.once('close', () => this.quit());
 
         this._killScript = new RedisScript(`
@@ -125,6 +124,14 @@ export class SessionManager {
     `);
     }
 
+    get namespace(): string | undefined {
+        return this._ns;
+    }
+
+    get ttl(): number | undefined {
+        return this._ttl;
+    }
+
     /**
      * Returns the number of sessions within the last n seconds.
      * @param {number} [secs] The elapsed time since the last activity of the session. Returns total count of sessions If not defined or zero
@@ -193,7 +200,7 @@ export class SessionManager {
      * @param {boolean} [noUpdate=false]
      * @return {Promise<Session>}
      */
-    async get(sessionId: string, noUpdate: boolean = false): Promise<Session> {
+    async get(sessionId: string, noUpdate: boolean = false): Promise<Session | undefined> {
         if (!sessionId)
             return Promise.reject(new TypeError('You must provide sessionId'));
         const session = new Session(this, {sessionId});
@@ -260,7 +267,7 @@ export class SessionManager {
      * @param {boolean} [noUpdate=false]
      * @return {Promise<Session>}
      */
-    async getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<Session> {
+    async getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<Session | undefined> {
         if (!userId)
             return Promise.reject(new TypeError('You must provide userId'));
         const client = await this._getClient();
@@ -333,8 +340,10 @@ export class SessionManager {
      * Stops wipe timer
      */
     quit(): void {
-        clearTimeout(this._wipeInterval);
-        this._wipeInterval = null;
+        if (this._wipeTimer) {
+            clearTimeout(this._wipeTimer);
+            this._wipeTimer = undefined;
+        }
     }
 
     // noinspection JSMethodCanBeStatic
@@ -350,13 +359,13 @@ export class SessionManager {
     private async _syncTime(client: Redis): Promise<number> {
         const resp = await client.time();
         // Synchronize redis server time with local time
-        this._timediff = (Date.now() / 1000) -
+        this._timeDiff = (Date.now() / 1000) -
             Math.floor(Number(resp[0]) + (Number(resp[1]) / 1000000));
         return this._now();
     }
 
     private _now(): number {
-        return Math.floor(Date.now() / 1000 + this._timediff);
+        return Math.floor(Date.now() / 1000 + this._timeDiff);
     }
 
     private async _getClient(): Promise<Redis> {
@@ -372,17 +381,18 @@ export class SessionManager {
                 this._client.once('ready', resolve);
             });
         }
-        if (this._timediff == null)
+        if (this._timeDiff == null)
             await this._syncTime(this._client);
         return this._client;
     }
 
     async _wipe(): Promise<void> {
-        clearTimeout(this._wipeTimer);
-        this._wipeTimer = null;
+        if (this._wipeTimer) {
+            clearTimeout(this._wipeTimer);
+            this._wipeTimer = undefined;
+        }
         const client = await this._getClient();
         await this._wipeScript.execute(client, this._ns, this._now());
     }
 
 }
-
