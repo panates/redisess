@@ -23,10 +23,11 @@ $ npm install redisess --save
 
 The example blow show how can you use Redisess in a simple express applicaiton.
 
-```js
-const express = require("express");
-const Redis = require("ioredis");
-const {SessionManager} = require("redisess");
+```ts
+import express from 'express';
+import Redis from 'ioredis';
+import {SessionManager} from 'redisess';
+
 const redis = new Redis(); 
 
 const manager = new SessionManager(redis, {
