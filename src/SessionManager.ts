@@ -386,7 +386,7 @@ export class SessionManager {
         return this._client;
     }
 
-    async _wipe(): Promise<void> {
+    private async _wipe(): Promise<void> {
         if (this._wipeTimer) {
             clearTimeout(this._wipeTimer);
             this._wipeTimer = undefined;
