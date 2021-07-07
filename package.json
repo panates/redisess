@@ -1,7 +1,7 @@
 {
   "name": "redisess",
   "description": "Powerful redis session manager for NodeJS",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "Panates Ltd.",
   "contributors": [
     "Eray Hanoglu <e.hanoglu@panates.com>"
@@ -21,8 +21,7 @@
   "peerDependencies": {
     "ioredis": "^4.x.x"
   },
-  "dependencies": {
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/ioredis": "^4.17.6",
     "@types/mocha": "^8.0.3",
