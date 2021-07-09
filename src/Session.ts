@@ -3,6 +3,7 @@ import zlib from "zlib";
 import {SessionManager} from './SessionManager';
 import {RedisScript} from './RedisScript';
 import {Redis} from 'ioredis';
+import promisify from 'putil-promisify';
 
 const unzip = util.promisify<Buffer, Buffer>(zlib.unzip);
 
@@ -132,10 +133,10 @@ export class Session {
         const args = ['us', 'la', 'ex', 'ttl'];
         /* istanbul ignore else */
         if (manager._additionalFields) {
-            for (const [i] of manager._additionalFields.entries())
-                args.push('f' + i);
+            for (const key of manager._additionalFields.keys())
+                args.push('f' + key);
         }
-        const resp = await client.hmget(sessKey, ...args);
+        const resp = await promisify.fromCallback(cb => client.hmget(sessKey, ...args, cb));
         this._userId = resp[0] || '';
         this._lastAccess = Number(resp[1]) || 0;
         this._expires = Number(resp[2]) || 0;
@@ -189,7 +190,7 @@ export class Session {
         } else keys = ['$' + key];
 
         // Query values for keys
-        const resp = await client.hmget(sessKey, keys);
+        const resp = await promisify.fromCallback(cb => client.hmget(sessKey, keys, cb));
 
         // Do type conversion
         for (const [i, v] of resp.entries())
@@ -209,16 +210,25 @@ export class Session {
     /**
      * Stores user data to session
      *
-     * @param {string|Object} key
+     * @param {Object} values
+     * @return {Promise<number>}
+     */
+    async set(values: Record<string, any>): Promise<number>
+    /**
+     * Stores user data to session
+     *
+     * @param {string} [key]
      * @param {*} [value]
      * @return {Promise<number>}
      */
-    async set(key, value): Promise<number> {
+    async set(key: string, value: any): Promise<number>
+    async set(arg0, arg1?): Promise<number> {
         const manager = this._manager;
         const sessKey = manager._ns + ':sess_' + this.sessionId;
         const client = await manager._getClient();
-        const values = this._prepareUserData(key, value);
-        const resp = await client.hmset(sessKey, values);
+        const values = typeof arg0 === 'object' ?
+            this._prepareUserData(arg0) : this._prepareUserData('' + arg0, arg1);
+        const resp = await promisify.fromCallback(cb => client.hmset(sessKey, values, cb));
         /* istanbul ignore next */
         if (!String(resp).includes('OK'))
             throw new Error('Redis write operation failed');
@@ -265,14 +275,9 @@ export class Session {
             throw new Error('Unable to store session due to an unknown error');
     }
 
-    /**
-     *
-     * @param {string|Object} key
-     * @param {*} [value]
-     * @return {Array<String>}
-     * @private
-     */
-    private _prepareUserData(key, value): string[] {
+    private _prepareUserData(values: Record<string, any>): string[];
+    private _prepareUserData(key, value): string[];
+    private _prepareUserData(arg0, arg1?): string[] {
         const makeTyped = (v) => {
             if (v instanceof Buffer)
                 return 'b' + v.toString('base64');
@@ -285,12 +290,12 @@ export class Session {
             return 's' + String(v);
         };
         let values: string[] = [];
-        if (typeof key === 'object') {
-            for (const k of Object.keys(key)) {
+        if (typeof arg0 === 'object') {
+            for (const k of Object.keys(arg0)) {
                 values.push('$' + k);
-                values.push(makeTyped(key[k]));
+                values.push(makeTyped(arg0[k]));
             }
-        } else values = ['$' + key, makeTyped(value)];
+        } else values = ['$' + arg0, makeTyped(arg1)];
         return values;
     }
 

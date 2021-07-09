@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import {RedisScript} from './RedisScript';
-import {Redis} from 'ioredis';
 import {Session} from './Session';
+import promisify from 'putil-promisify';
 
 export namespace SessionManager {
     export interface Options {
@@ -12,12 +12,14 @@ export namespace SessionManager {
     }
 }
 
+export type ResultSession = Session & Record<string, any>;
+
 /**
  *
  * @class
  */
 export class SessionManager {
-    private readonly _client: Redis;
+    private readonly _client;
     private readonly _ns?: string;
     private readonly _ttl?: number;
     private readonly _additionalFields?: string[];
@@ -38,7 +40,7 @@ export class SessionManager {
      * @param {number} [props.wipeInterval=1000]
      * @param {Array<String>} [props.additionalFields]
      */
-    constructor(client: Redis, props: SessionManager.Options = {}) {
+    constructor(client, props: SessionManager.Options = {}) {
         if (!(client && typeof client.hmget === 'function'))
             throw new TypeError('You must provide redis instance');
         this._client = client;
@@ -141,8 +143,9 @@ export class SessionManager {
         const client = await this._getClient();
         secs = Number(secs);
         const prefix = this._ns;
-        const resp = await client.zcount(prefix + ':ACTIVITY',
-            (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf');
+        const resp = await promisify.fromCallback(cb =>
+            client.zcount(prefix + ':ACTIVITY',
+                (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf', cb));
         return Number(resp);
     }
 
@@ -158,9 +161,16 @@ export class SessionManager {
             throw new TypeError('You must provide userId');
         const client = await this._getClient();
         secs = Number(secs);
-        const resp = await client.zcount(this._ns + ':user_' + userId,
-            (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf');
-        return Number(resp);
+        return new Promise(((resolve, reject) => {
+            client.zcount(this._ns + ':user_' + userId,
+                (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf',
+                (err, resp) => {
+                    /* istanbul ignore next */
+                    if (err)
+                        return reject(err);
+                    resolve(Number(resp))
+                });
+        }))
     }
 
     /**
@@ -172,7 +182,8 @@ export class SessionManager {
      * @param {*} [props.*] Additional data to set for this sessions
      * @param props
      */
-    async create(userId: string, props?: { ttl?: number, [index: string]: any }): Promise<Session> {
+    async create(userId: string,
+                 props?: { ttl?: number, [index: string]: any }): Promise<ResultSession> {
         if (!userId)
             throw new TypeError('You must provide userId');
 
@@ -198,11 +209,11 @@ export class SessionManager {
      *
      * @param {string} sessionId
      * @param {boolean} [noUpdate=false]
-     * @return {Promise<Session>}
+     * @return {Promise<ResultSession>}
      */
-    async get(sessionId: string, noUpdate: boolean = false): Promise<Session | undefined> {
+    async get(sessionId: string, noUpdate: boolean = false): Promise<ResultSession | undefined> {
         if (!sessionId)
-            return Promise.reject(new TypeError('You must provide sessionId'));
+            throw new TypeError('You must provide sessionId');
         const session = new Session(this, {sessionId});
         await session.read();
         if (!session.valid)
@@ -222,10 +233,10 @@ export class SessionManager {
     async getAllSessions(secs: number): Promise<string[]> {
         const client = await this._getClient();
         secs = Number(secs);
-        return await client.zrevrangebyscore(this._ns + ':ACTIVITY',
-            '+inf',
-            (secs ? Math.floor(this._now() - secs) : '-inf')
-        );
+        return await promisify.fromCallback(cb =>
+            client.zrevrangebyscore(this._ns + ':ACTIVITY',
+                '+inf',
+                (secs ? Math.floor(this._now() - secs) : '-inf'), cb));
     }
 
     /**
@@ -234,12 +245,13 @@ export class SessionManager {
      * @param {number} [secs]
      * @return {Promise<Array<String>>}
      */
-    async getAllUsers(secs: number): Promise<string[]> {
+    async getAllUsers(secs: number = 0): Promise<string[]> {
         const client = await this._getClient();
         secs = Number(secs);
-        return await client.zrevrangebyscore(this._ns + ':USERS',
-            '+inf',
-            (secs ? Math.floor(this._now() - secs) : '-inf')
+        return await promisify.fromCallback(cb =>
+            client.zrevrangebyscore(this._ns + ':USERS',
+                '+inf',
+                (secs ? Math.floor(this._now() - secs) : '-inf'), cb)
         );
     }
 
@@ -255,9 +267,10 @@ export class SessionManager {
             throw new TypeError('You must provide userId');
         const client = await this._getClient();
         n = Number(n);
-        return await client.zrevrangebyscore(this._ns + ':user_' + userId,
-            '+inf',
-            (n ? Math.floor(this._now() - n) : '-inf'));
+        return await promisify.fromCallback(cb =>
+            client.zrevrangebyscore(this._ns + ':user_' + userId,
+                '+inf',
+                (n ? Math.floor(this._now() - n) : '-inf'), cb));
     }
 
     /**
@@ -265,13 +278,14 @@ export class SessionManager {
      *
      * @param {string} userId
      * @param {boolean} [noUpdate=false]
-     * @return {Promise<Session>}
+     * @return {Promise<ResultSession>}
      */
-    async getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<Session | undefined> {
+    async getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<ResultSession | undefined> {
         if (!userId)
-            return Promise.reject(new TypeError('You must provide userId'));
+            throw new TypeError('You must provide userId');
         const client = await this._getClient();
-        const sessionId = await client.zrevrange(this._ns + ':user_' + userId, -1, -1);
+        const sessionId = await promisify.fromCallback(cb =>
+            client.zrevrange(this._ns + ':user_' + userId, -1, -1, cb));
         if (sessionId && sessionId.length)
             return await this.get(sessionId[0], noUpdate);
     }
@@ -286,7 +300,8 @@ export class SessionManager {
         if (!sessionId)
             throw new TypeError('You must provide sessionId');
         const client = await this._getClient();
-        const resp = await client.exists(this._ns + ':sess_' + sessionId);
+        const resp = await promisify.fromCallback(cb =>
+            client.exists(this._ns + ':sess_' + sessionId, cb));
         return !!Number(resp);
     }
 
@@ -298,7 +313,7 @@ export class SessionManager {
      */
     async kill(sessionId: string): Promise<void> {
         if (!sessionId)
-            return Promise.reject(new TypeError('You must provide sessionId'));
+            throw new TypeError('You must provide sessionId');
         const session = await this.get(sessionId, true);
         if (session)
             return await session.kill();
@@ -312,7 +327,7 @@ export class SessionManager {
      */
     async killUser(userId: string): Promise<void> {
         if (!userId)
-            return Promise.reject(new TypeError('You must provide userId'));
+            throw new TypeError('You must provide userId');
         const sessions = await this.getUserSessions(userId);
         for (const sid of sessions) {
             await this.kill(sid);
@@ -346,6 +361,15 @@ export class SessionManager {
         }
     }
 
+    async wipe(): Promise<void> {
+        if (this._wipeTimer) {
+            clearTimeout(this._wipeTimer);
+            this._wipeTimer = undefined;
+        }
+        const client = await this._getClient();
+        await this._wipeScript.execute(client, this._ns, this._now());
+    }
+
     // noinspection JSMethodCanBeStatic
     /**
      *
@@ -356,8 +380,8 @@ export class SessionManager {
         return crypto.randomBytes(16).toString('hex');
     }
 
-    private async _syncTime(client: Redis): Promise<number> {
-        const resp = await client.time();
+    private async _syncTime(client): Promise<number> {
+        const resp = await promisify.fromCallback(cb => client.time(cb));
         // Synchronize redis server time with local time
         this._timeDiff = (Date.now() / 1000) -
             Math.floor(Number(resp[0]) + (Number(resp[1]) / 1000000));
@@ -368,15 +392,15 @@ export class SessionManager {
         return Math.floor(Date.now() / 1000 + this._timeDiff);
     }
 
-    private async _getClient(): Promise<Redis> {
+    private async _getClient(): Promise<any> {
         if (!this._wipeTimer) {
             this._wipeTimer =
                 setTimeout(() => {
-                    this._wipe().catch(/* istanbul ignore next */() => 1);
+                    this.wipe().catch(/* istanbul ignore next */() => 1);
                 }, this._wipeInterval);
             this._wipeTimer.unref();
         }
-        if (this._client.status !== 'ready') {
+        if ((this._client.status !== 'ready' && !this._client.ready)) {
             await new Promise(resolve => {
                 this._client.once('ready', resolve);
             });
@@ -384,15 +408,6 @@ export class SessionManager {
         if (this._timeDiff == null)
             await this._syncTime(this._client);
         return this._client;
-    }
-
-    private async _wipe(): Promise<void> {
-        if (this._wipeTimer) {
-            clearTimeout(this._wipeTimer);
-            this._wipeTimer = undefined;
-        }
-        const client = await this._getClient();
-        await this._wipeScript.execute(client, this._ns, this._now());
     }
 
 }
