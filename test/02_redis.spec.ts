@@ -3,7 +3,7 @@ import './support/env';
 import redis from 'redis';
 import {initSessionManagerTests} from './session-manager.test';
 
-describe('node-redis', function () {
+describe('redis', function () {
 
     const ctx: any = {};
 
@@ -18,8 +18,8 @@ describe('node-redis', function () {
         ctx.redis.once('error', callDone);
     });
 
-    after(async () => {
-        await ctx.redis.end(true);
+    after(() => {
+        ctx.redis.end(true);
     });
 
     initSessionManagerTests(ctx);

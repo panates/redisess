@@ -16,17 +16,25 @@ High performant advanced Redis session manager for NodeJS.
 ## Installation
 
 Redisess requires a redis client library to work. 
-It has been tested for both [node-redis](https://www.npmjs.com/package/node-redis) and
-[ioredis](https://www.npmjs.com/package/ioredis) libraries.
+It has been tested for [redis](https://www.npmjs.com/package/redis), 
+[node-redis](https://www.npmjs.com/package/node-redis) and
+[ioredis](https://www.npmjs.com/package/ioredis) client libraries.
 
 ```bash
-$ npm install node-redis redisess --save
+$ npm install redis redisess --save
 ```
-or 
+or
 
 ```bash
 $ npm install ioredis redisess --save
 ```
+
+or 
+
+```bash
+$ npm install node-redis redisess --save
+``` 
+
 
 ## Basic Usage
 
@@ -37,9 +45,9 @@ import express from 'express';
 import Redis from 'ioredis';
 import {SessionManager} from 'redisess';
 
-const redis = new Redis(); 
+const client = new Redis(); 
 
-const manager = new SessionManager(redis, {
+const manager = new SessionManager(client, {
     namespace: 'myapp',
     additionalFields: ['groupId'],
     ttl: 120 // Default Time-To-Live value in seconds: 120 seconds
