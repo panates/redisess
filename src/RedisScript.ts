@@ -1,4 +1,5 @@
 import promisify from 'putil-promisify';
+import { Redis } from 'ioredis';
 
 export class RedisScript {
     private readonly _src: string;
@@ -11,7 +12,7 @@ export class RedisScript {
         this._keys = keys || [];
     }
 
-    async execute(client, ...args): Promise<boolean> {
+    async execute(client: Redis, ...args): Promise<boolean> {
         if (!this._sha)
             await this._loadScript(client);
         try {
@@ -26,7 +27,7 @@ export class RedisScript {
         }
     }
 
-    private async _execute(client, ...args): Promise<boolean> {
+    private async _execute(client: Redis, ...args): Promise<boolean> {
         await this._loadScript(client);
         const prms = [...this._keys];
         const m = Math.max(this._keys.length, args.length);
@@ -40,9 +41,9 @@ export class RedisScript {
             client.evalsha(this._sha, m, ...prms, cb)));
     }
 
-    private async _loadScript(client): Promise<void> {
+    private async _loadScript(client: Redis): Promise<void> {
         const resp = await promisify.fromCallback(cb =>
-            client.script('load', this._src, cb));
+            client.script('LOAD', this._src, cb));
         /* istanbul ignore next */
         if (!resp)
             throw new Error('Unable to load redis script in to redis cache');

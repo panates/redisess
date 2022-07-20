@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import Redis from 'ioredis';
 import {RedisScript} from './RedisScript';
 import {Session} from './Session';
 import promisify from 'putil-promisify';
@@ -19,7 +20,7 @@ export type ResultSession = Session & Record<string, any>;
  * @class
  */
 export class SessionManager {
-    private readonly _client;
+    private readonly _client: Redis;
     private readonly _ns?: string;
     private readonly _ttl?: number;
     private readonly _additionalFields?: string[];
@@ -40,8 +41,8 @@ export class SessionManager {
      * @param {number} [props.wipeInterval=1000]
      * @param {Array<String>} [props.additionalFields]
      */
-    constructor(client, props: SessionManager.Options = {}) {
-        if (!(client && typeof client.hmget === 'function'))
+    constructor(client: Redis, props: SessionManager.Options = {}) {
+        if (!(client && typeof client.hmset === 'function'))
             throw new TypeError('You must provide redis instance');
         this._client = client;
         this._additionalFields = props.additionalFields ?
@@ -380,7 +381,7 @@ export class SessionManager {
         return crypto.randomBytes(16).toString('hex');
     }
 
-    private async _syncTime(client): Promise<number> {
+    private async _syncTime(client: Redis): Promise<number> {
         const resp = await promisify.fromCallback(cb => client.time(cb));
         // Synchronize redis server time with local time
         this._timeDiff = (Date.now() / 1000) -
@@ -392,7 +393,7 @@ export class SessionManager {
         return Math.floor(Date.now() / 1000 + this._timeDiff);
     }
 
-    private async _getClient(): Promise<any> {
+    private async _getClient(): Promise<Redis> {
         if (!this._wipeTimer) {
             this._wipeTimer =
                 setTimeout(() => {
@@ -400,7 +401,7 @@ export class SessionManager {
                 }, this._wipeInterval);
             this._wipeTimer.unref();
         }
-        if ((this._client.status !== 'ready' && !this._client.ready)) {
+        if ((this._client.status !== 'ready')) {
             await new Promise(resolve => {
                 this._client.once('ready', resolve);
             });

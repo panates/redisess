@@ -15,26 +15,14 @@ High performant advanced Redis session manager for NodeJS.
 
 ## Installation
 
-Redisess requires a redis client library to work. 
+Redisess requires "ioredis" library to work. 
 It has been tested for [redis](https://www.npmjs.com/package/redis), 
 [node-redis](https://www.npmjs.com/package/node-redis) and
 [ioredis](https://www.npmjs.com/package/ioredis) client libraries.
 
 ```bash
-$ npm install redis redisess --save
-```
-or
-
-```bash
 $ npm install ioredis redisess --save
 ```
-
-or 
-
-```bash
-$ npm install node-redis redisess --save
-``` 
-
 
 ## Basic Usage
 
