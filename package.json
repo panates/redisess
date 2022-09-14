@@ -24,21 +24,21 @@
   "devDependencies": {
     "@types/ioredis": "^4.28.10",
     "@types/mocha": "^9.1.1",
-    "@types/node": "^18.0.6",
-    "@typescript-eslint/eslint-plugin": "^5.30.7",
-    "@typescript-eslint/parser": "^5.30.7",
+    "@types/node": "^18.7.18",
+    "@typescript-eslint/eslint-plugin": "^5.37.0",
+    "@typescript-eslint/parser": "^5.37.0",
     "babel-eslint": "^10.1.0",
-    "eslint": "^8.20.0",
+    "eslint": "^8.23.1",
     "eslint-config-google": "^0.14.0",
-    "ioredis": "^5.2.1",
+    "ioredis": "^5.2.3",
     "mocha": "^10.0.0",
     "nyc": "^15.1.0",
     "putil-promisify": "^1.8.5",
     "ts-cleanup": "^0.2.5",
     "ts-loader": "^9.3.1",
     "ts-node": "^10.9.1",
-    "tsconfig-paths": "^4.0.0",
-    "typescript": "^4.7.4"
+    "tsconfig-paths": "^4.1.0",
+    "typescript": "^4.8.3"
   },
   "engines": {
     "node": ">=10.0"
