@@ -1,16 +1,16 @@
 import crypto from 'crypto';
-import Redis from 'ioredis';
-import {RedisScript} from './RedisScript';
-import {Session} from './Session';
+import Redis, { Cluster } from 'ioredis';
+import { RedisScript } from './RedisScript';
+import { Session } from './Session';
 import promisify from 'putil-promisify';
 
 export namespace SessionManager {
-    export interface Options {
-        namespace?: string;
-        ttl?: number;
-        wipeInterval?: number;
-        additionalFields?: string[];
-    }
+  export interface Options {
+    namespace?: string;
+    ttl?: number;
+    wipeInterval?: number;
+    additionalFields?: string[];
+  }
 }
 
 export type ResultSession = Session & Record<string, any>;
@@ -20,40 +20,40 @@ export type ResultSession = Session & Record<string, any>;
  * @class
  */
 export class SessionManager {
-    private readonly _client: Redis;
-    private readonly _ns?: string;
-    private readonly _ttl?: number;
-    private readonly _additionalFields?: string[];
-    private readonly _killScript: RedisScript;
-    private readonly _writeScript: RedisScript;
-    private readonly _wipeScript: RedisScript;
-    private readonly _killAllScript: RedisScript;
-    private _wipeTimer?: NodeJS.Timeout;
-    private _wipeInterval?: number;
-    private _timeDiff: number;
+  private readonly _client: Redis | Cluster;
+  private readonly _ns?: string;
+  private readonly _ttl?: number;
+  private readonly _additionalFields?: string[];
+  private readonly _killScript: RedisScript;
+  private readonly _writeScript: RedisScript;
+  private readonly _wipeScript: RedisScript;
+  private readonly _killAllScript: RedisScript;
+  private _wipeTimer?: NodeJS.Timeout;
+  private _wipeInterval?: number;
+  private _timeDiff: number;
 
-    /**
-     *
-     * @param {Object} client
-     * @param {Object} [props]
-     * @param {Object} [props.namespace='sm']
-     * @param {number} [props.ttl] Time-To-Live value in seconds
-     * @param {number} [props.wipeInterval=1000]
-     * @param {Array<String>} [props.additionalFields]
-     */
-    constructor(client: Redis, props: SessionManager.Options = {}) {
-        if (!(client && typeof client.hmset === 'function'))
-            throw new TypeError('You must provide redis instance');
-        this._client = client;
-        this._additionalFields = props.additionalFields ?
-            Object.freeze(props.additionalFields) as string[] : undefined;
-        this._ns = (props.namespace || 'sessions');
-        this._ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : (30 * 60);
-        this._timeDiff = 0;
-        this._wipeInterval = props.wipeInterval || 1000;
-        client.once('close', () => this.quit());
+  /**
+   *
+   * @param {Object} client
+   * @param {Object} [props]
+   * @param {Object} [props.namespace='sm']
+   * @param {number} [props.ttl] Time-To-Live value in seconds
+   * @param {number} [props.wipeInterval=1000]
+   * @param {Array<String>} [props.additionalFields]
+   */
+  constructor(client: Redis | Cluster, props: SessionManager.Options = {}) {
+    if (!(client && typeof client.hmset === 'function'))
+      throw new TypeError('You must provide redis instance');
+    this._client = client;
+    this._additionalFields = props.additionalFields ?
+        Object.freeze(props.additionalFields) as string[] : undefined;
+    this._ns = (props.namespace || 'sessions');
+    this._ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : (30 * 60);
+    this._timeDiff = 0;
+    this._wipeInterval = props.wipeInterval || 1000;
+    client.once('close', () => this.quit());
 
-        this._killScript = new RedisScript(`
+    this._killScript = new RedisScript(`
     local prefix = ARGV[1]
     local sessionId = ARGV[2]
     local userId = ARGV[3]
@@ -68,14 +68,14 @@ export class SessionManager {
     return 1        
     `);
 
-        let s = '';
-        if (props.additionalFields) {
-            for (let i = 0; i < props.additionalFields.length; i++) {
-                s += ', "f' + i + '", ARGV[' + (7 + i) + ']';
-            }
-        }
+    let s = '';
+    if (props.additionalFields) {
+      for (let i = 0; i < props.additionalFields.length; i++) {
+        s += ', "f' + i + '", ARGV[' + (7 + i) + ']';
+      }
+    }
 
-        this._writeScript = new RedisScript(`
+    this._writeScript = new RedisScript(`
     local prefix = ARGV[1]
     local lastAccess = tonumber(ARGV[2])
     local userId = ARGV[3]
@@ -87,7 +87,7 @@ export class SessionManager {
     redis.call("zadd", prefix..":ACTIVITY", lastAccess, sessionId)          
     redis.call("zadd", prefix..":user_"..userId, lastAccess, sessionId)
     redis.call("hmset", prefix..":sess_"..sessionId, "us", userId, "la", lastAccess, "ex", expires, "ttl", ttl` +
-            s + `)                       
+        s + `)                       
     if (expires > 0) then
       redis.call("zadd", prefix..":EXPIRES", expires, sessionId)
     else
@@ -96,7 +96,7 @@ export class SessionManager {
     return 1
     `);
 
-        this._wipeScript = new RedisScript(`
+    this._wipeScript = new RedisScript(`
     -- find keys with wildcard
     local matches = redis.call("zrevrangebyscore", ARGV[1]..":EXPIRES", ARGV[2], "-inf")
     if unpack(matches) == nil then
@@ -114,7 +114,7 @@ export class SessionManager {
     redis.call("zrem", ARGV[1]..":EXPIRES", unpack(matches))                    
     `);
 
-        this._killAllScript = new RedisScript(`
+    this._killAllScript = new RedisScript(`
     -- find keys with wildcard
     local matches = redis.call("keys", ARGV[1]) 
     --if there are any keys
@@ -125,290 +125,290 @@ export class SessionManager {
       return 0 --if no keys to delete
     end
     `);
-    }
+  }
 
-    get namespace(): string | undefined {
-        return this._ns;
-    }
+  get namespace(): string | undefined {
+    return this._ns;
+  }
 
-    get ttl(): number | undefined {
-        return this._ttl;
-    }
+  get ttl(): number | undefined {
+    return this._ttl;
+  }
 
-    /**
-     * Returns the number of sessions within the last n seconds.
-     * @param {number} [secs] The elapsed time since the last activity of the session. Returns total count of sessions If not defined or zero
-     * @return {Promise<Number>}
-     */
-    async count(secs: number = 0): Promise<number> {
-        const client = await this._getClient();
-        secs = Number(secs);
-        const prefix = this._ns;
-        const resp = await promisify.fromCallback(cb =>
-            client.zcount(prefix + ':ACTIVITY',
-                (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf', cb));
-        return Number(resp);
-    }
+  /**
+   * Returns the number of sessions within the last n seconds.
+   * @param {number} [secs] The elapsed time since the last activity of the session. Returns total count of sessions If not defined or zero
+   * @return {Promise<Number>}
+   */
+  async count(secs: number = 0): Promise<number> {
+    const client = await this._getClient();
+    secs = Number(secs);
+    const prefix = this._ns;
+    const resp = await promisify.fromCallback(cb =>
+        client.zcount(prefix + ':ACTIVITY',
+            (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf', cb));
+    return Number(resp);
+  }
 
-    /**
-     * Retrieves session count of single user which were active within the last n seconds.
-     *
-     * @param {string} userId
-     * @param {number} [secs]
-     * @return {Promise<number>}
-     */
-    async countForUser(userId: string, secs: number = 0): Promise<number> {
-        if (!userId)
-            throw new TypeError('You must provide userId');
-        const client = await this._getClient();
-        secs = Number(secs);
-        return new Promise(((resolve, reject) => {
-            client.zcount(this._ns + ':user_' + userId,
-                (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf',
-                (err, resp) => {
-                    /* istanbul ignore next */
-                    if (err)
-                        return reject(err);
-                    resolve(Number(resp))
-                });
-        }))
-    }
+  /**
+   * Retrieves session count of single user which were active within the last n seconds.
+   *
+   * @param {string} userId
+   * @param {number} [secs]
+   * @return {Promise<number>}
+   */
+  async countForUser(userId: string, secs: number = 0): Promise<number> {
+    if (!userId)
+      throw new TypeError('You must provide userId');
+    const client = await this._getClient();
+    secs = Number(secs);
+    return new Promise(((resolve, reject) => {
+      client.zcount(this._ns + ':user_' + userId,
+          (secs ? Math.floor(this._now() - secs) : '-inf'), '+inf',
+          (err, resp) => {
+            /* istanbul ignore next */
+            if (err)
+              return reject(err);
+            resolve(Number(resp))
+          });
+    }))
+  }
 
-    /**
-     * Creates a new session for the user
-     *
-     * @param {string} userId
-     * @param {Object} [props]
-     * @param {number} [props.ttl] Time-To-Live value in seconds
-     * @param {*} [props.*] Additional data to set for this sessions
-     * @param props
-     */
-    async create(userId: string,
-                 props?: { ttl?: number, [index: string]: any }): Promise<ResultSession> {
-        if (!userId)
-            throw new TypeError('You must provide userId');
+  /**
+   * Creates a new session for the user
+   *
+   * @param {string} userId
+   * @param {Object} [props]
+   * @param {number} [props.ttl] Time-To-Live value in seconds
+   * @param {*} [props.*] Additional data to set for this sessions
+   * @param props
+   */
+  async create(userId: string,
+               props?: { ttl?: number, [index: string]: any }): Promise<ResultSession> {
+    if (!userId)
+      throw new TypeError('You must provide userId');
 
-        props = props || {};
-        const ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : this._ttl;
-        const sessionId = this._createSessionId();
-        const session = new Session(this, {
-            sessionId,
-            userId,
-            ttl
-        });
-        /* istanbul ignore else */
-        if (this._additionalFields) {
-            for (const f of this._additionalFields)
-                session[f] = props[f];
-        }
-        await session.write();
-        return session;
+    props = props || {};
+    const ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : this._ttl;
+    const sessionId = this._createSessionId();
+    const session = new Session(this, {
+      sessionId,
+      userId,
+      ttl
+    });
+    /* istanbul ignore else */
+    if (this._additionalFields) {
+      for (const f of this._additionalFields)
+        session[f] = props[f];
     }
+    await session.write();
+    return session;
+  }
 
-    /**
-     * Retrieves session by sessionId
-     *
-     * @param {string} sessionId
-     * @param {boolean} [noUpdate=false]
-     * @return {Promise<ResultSession>}
-     */
-    async get(sessionId: string, noUpdate: boolean = false): Promise<ResultSession | undefined> {
-        if (!sessionId)
-            throw new TypeError('You must provide sessionId');
-        const session = new Session(this, {sessionId});
-        await session.read();
-        if (!session.valid)
-            return undefined;
-        if (noUpdate)
-            return session;
-        await session.write();
-        return session;
-    }
+  /**
+   * Retrieves session by sessionId
+   *
+   * @param {string} sessionId
+   * @param {boolean} [noUpdate=false]
+   * @return {Promise<ResultSession>}
+   */
+  async get(sessionId: string, noUpdate: boolean = false): Promise<ResultSession | undefined> {
+    if (!sessionId)
+      throw new TypeError('You must provide sessionId');
+    const session = new Session(this, {sessionId});
+    await session.read();
+    if (!session.valid)
+      return undefined;
+    if (noUpdate)
+      return session;
+    await session.write();
+    return session;
+  }
 
-    /**
-     * Retrieves all session ids which were active within the last n seconds.
-     *
-     * @param {number} [secs]
-     * @return {Promise<Array<String>>}
-     */
-    async getAllSessions(secs: number): Promise<string[]> {
-        const client = await this._getClient();
-        secs = Number(secs);
-        return await promisify.fromCallback(cb =>
-            client.zrevrangebyscore(this._ns + ':ACTIVITY',
-                '+inf',
-                (secs ? Math.floor(this._now() - secs) : '-inf'), cb));
-    }
+  /**
+   * Retrieves all session ids which were active within the last n seconds.
+   *
+   * @param {number} [secs]
+   * @return {Promise<Array<String>>}
+   */
+  async getAllSessions(secs: number): Promise<string[]> {
+    const client = await this._getClient();
+    secs = Number(secs);
+    return await promisify.fromCallback(cb =>
+        client.zrevrangebyscore(this._ns + ':ACTIVITY',
+            '+inf',
+            (secs ? Math.floor(this._now() - secs) : '-inf'), cb));
+  }
 
-    /**
-     * Retrieves all user ids which were active within the last n seconds.
-     *
-     * @param {number} [secs]
-     * @return {Promise<Array<String>>}
-     */
-    async getAllUsers(secs: number = 0): Promise<string[]> {
-        const client = await this._getClient();
-        secs = Number(secs);
-        return await promisify.fromCallback(cb =>
-            client.zrevrangebyscore(this._ns + ':USERS',
-                '+inf',
-                (secs ? Math.floor(this._now() - secs) : '-inf'), cb)
-        );
-    }
+  /**
+   * Retrieves all user ids which were active within the last n seconds.
+   *
+   * @param {number} [secs]
+   * @return {Promise<Array<String>>}
+   */
+  async getAllUsers(secs: number = 0): Promise<string[]> {
+    const client = await this._getClient();
+    secs = Number(secs);
+    return await promisify.fromCallback(cb =>
+        client.zrevrangebyscore(this._ns + ':USERS',
+            '+inf',
+            (secs ? Math.floor(this._now() - secs) : '-inf'), cb)
+    );
+  }
 
-    /**
-     * Retrieves session ids of single user which were active within the last n seconds.
-     *
-     * @param {string} userId
-     * @param {number} [n]
-     * @return {Promise<Array<String>>}
-     */
-    async getUserSessions(userId: string, n: number = 0): Promise<string[]> {
-        if (!userId)
-            throw new TypeError('You must provide userId');
-        const client = await this._getClient();
-        n = Number(n);
-        return await promisify.fromCallback(cb =>
-            client.zrevrangebyscore(this._ns + ':user_' + userId,
-                '+inf',
-                (n ? Math.floor(this._now() - n) : '-inf'), cb));
-    }
+  /**
+   * Retrieves session ids of single user which were active within the last n seconds.
+   *
+   * @param {string} userId
+   * @param {number} [n]
+   * @return {Promise<Array<String>>}
+   */
+  async getUserSessions(userId: string, n: number = 0): Promise<string[]> {
+    if (!userId)
+      throw new TypeError('You must provide userId');
+    const client = await this._getClient();
+    n = Number(n);
+    return await promisify.fromCallback(cb =>
+        client.zrevrangebyscore(this._ns + ':user_' + userId,
+            '+inf',
+            (n ? Math.floor(this._now() - n) : '-inf'), cb));
+  }
 
-    /**
-     * Retrieves oldest session of user
-     *
-     * @param {string} userId
-     * @param {boolean} [noUpdate=false]
-     * @return {Promise<ResultSession>}
-     */
-    async getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<ResultSession | undefined> {
-        if (!userId)
-            throw new TypeError('You must provide userId');
-        const client = await this._getClient();
-        const sessionId = await promisify.fromCallback(cb =>
-            client.zrevrange(this._ns + ':user_' + userId, -1, -1, cb));
-        if (sessionId && sessionId.length)
-            return await this.get(sessionId[0], noUpdate);
-    }
+  /**
+   * Retrieves oldest session of user
+   *
+   * @param {string} userId
+   * @param {boolean} [noUpdate=false]
+   * @return {Promise<ResultSession>}
+   */
+  async getOldestUserSession(userId: string, noUpdate: boolean = false): Promise<ResultSession | undefined> {
+    if (!userId)
+      throw new TypeError('You must provide userId');
+    const client = await this._getClient();
+    const sessionId = await promisify.fromCallback(cb =>
+        client.zrevrange(this._ns + ':user_' + userId, -1, -1, cb));
+    if (sessionId && sessionId.length)
+      return await this.get(sessionId[0], noUpdate);
+  }
 
-    /**
-     * Returns true if sessionId exists, false otherwise,
-     *
-     * @param {string} sessionId
-     * @return {Promise<Boolean>}
-     */
-    async exists(sessionId: string): Promise<Boolean> {
-        if (!sessionId)
-            throw new TypeError('You must provide sessionId');
-        const client = await this._getClient();
-        const resp = await promisify.fromCallback(cb =>
-            client.exists(this._ns + ':sess_' + sessionId, cb));
-        return !!Number(resp);
-    }
+  /**
+   * Returns true if sessionId exists, false otherwise,
+   *
+   * @param {string} sessionId
+   * @return {Promise<Boolean>}
+   */
+  async exists(sessionId: string): Promise<Boolean> {
+    if (!sessionId)
+      throw new TypeError('You must provide sessionId');
+    const client = await this._getClient();
+    const resp = await promisify.fromCallback(cb =>
+        client.exists(this._ns + ':sess_' + sessionId, cb));
+    return !!Number(resp);
+  }
 
-    /**
-     * Kills single session
-     *
-     * @param {string} sessionId
-     * @return {Promise<onvolumechange>}
-     */
-    async kill(sessionId: string): Promise<void> {
-        if (!sessionId)
-            throw new TypeError('You must provide sessionId');
-        const session = await this.get(sessionId, true);
-        if (session)
-            return await session.kill();
-    }
+  /**
+   * Kills single session
+   *
+   * @param {string} sessionId
+   * @return {Promise<onvolumechange>}
+   */
+  async kill(sessionId: string): Promise<void> {
+    if (!sessionId)
+      throw new TypeError('You must provide sessionId');
+    const session = await this.get(sessionId, true);
+    if (session)
+      return await session.kill();
+  }
 
-    /**
-     * Kills all sessions of user
-     *
-     * @param {string} userId
-     * @return {Promise}
-     */
-    async killUser(userId: string): Promise<void> {
-        if (!userId)
-            throw new TypeError('You must provide userId');
-        const sessions = await this.getUserSessions(userId);
-        for (const sid of sessions) {
-            await this.kill(sid);
-        }
+  /**
+   * Kills all sessions of user
+   *
+   * @param {string} userId
+   * @return {Promise}
+   */
+  async killUser(userId: string): Promise<void> {
+    if (!userId)
+      throw new TypeError('You must provide userId');
+    const sessions = await this.getUserSessions(userId);
+    for (const sid of sessions) {
+      await this.kill(sid);
     }
+  }
 
-    /**
-     * Kills all sessions for application
-     *
-     * @return {Promise}
-     */
-    async killAll(): Promise<void> {
-        const client = await this._getClient();
-        await this._killAllScript.execute(client, this._ns + ':*');
-    }
+  /**
+   * Kills all sessions for application
+   *
+   * @return {Promise}
+   */
+  async killAll(): Promise<void> {
+    const client = await this._getClient();
+    await this._killAllScript.execute(client, this._ns + ':*');
+  }
 
-    async now(): Promise<number> {
-        const client = await this._getClient();
-        await this._syncTime(client);
-        return this._now();
-    }
+  async now(): Promise<number> {
+    const client = await this._getClient();
+    await this._syncTime(client);
+    return this._now();
+  }
 
-    /* istanbul ignore next */
-    /**
-     * Stops wipe timer
-     */
-    quit(): void {
-        if (this._wipeTimer) {
-            clearTimeout(this._wipeTimer);
-            this._wipeTimer = undefined;
-        }
+  /* istanbul ignore next */
+  /**
+   * Stops wipe timer
+   */
+  quit(): void {
+    if (this._wipeTimer) {
+      clearTimeout(this._wipeTimer);
+      this._wipeTimer = undefined;
     }
+  }
 
-    async wipe(): Promise<void> {
-        if (this._wipeTimer) {
-            clearTimeout(this._wipeTimer);
-            this._wipeTimer = undefined;
-        }
-        const client = await this._getClient();
-        await this._wipeScript.execute(client, this._ns, this._now());
+  async wipe(): Promise<void> {
+    if (this._wipeTimer) {
+      clearTimeout(this._wipeTimer);
+      this._wipeTimer = undefined;
     }
+    const client = await this._getClient();
+    await this._wipeScript.execute(client, this._ns, this._now());
+  }
 
-    // noinspection JSMethodCanBeStatic
-    /**
-     *
-     * @return {string}
-     * @private
-     */
-    private _createSessionId(): string {
-        return crypto.randomBytes(16).toString('hex');
-    }
+  // noinspection JSMethodCanBeStatic
+  /**
+   *
+   * @return {string}
+   * @private
+   */
+  private _createSessionId(): string {
+    return crypto.randomBytes(16).toString('hex');
+  }
 
-    private async _syncTime(client: Redis): Promise<number> {
-        const resp = await promisify.fromCallback(cb => client.time(cb));
-        // Synchronize redis server time with local time
-        this._timeDiff = (Date.now() / 1000) -
-            Math.floor(Number(resp[0]) + (Number(resp[1]) / 1000000));
-        return this._now();
-    }
+  private async _syncTime(client: Redis | Cluster): Promise<number> {
+    const resp = await promisify.fromCallback(cb => client.time(cb));
+    // Synchronize redis server time with local time
+    this._timeDiff = (Date.now() / 1000) -
+        Math.floor(Number(resp[0]) + (Number(resp[1]) / 1000000));
+    return this._now();
+  }
 
-    private _now(): number {
-        return Math.floor(Date.now() / 1000 + this._timeDiff);
-    }
+  private _now(): number {
+    return Math.floor(Date.now() / 1000 + this._timeDiff);
+  }
 
-    private async _getClient(): Promise<Redis> {
-        if (!this._wipeTimer) {
-            this._wipeTimer =
-                setTimeout(() => {
-                    this.wipe().catch(/* istanbul ignore next */() => 1);
-                }, this._wipeInterval);
-            this._wipeTimer.unref();
-        }
-        if ((this._client.status !== 'ready')) {
-            await new Promise(resolve => {
-                this._client.once('ready', resolve);
-            });
-        }
-        if (this._timeDiff == null)
-            await this._syncTime(this._client);
-        return this._client;
+  private async _getClient(): Promise<Redis | Cluster> {
+    if (!this._wipeTimer) {
+      this._wipeTimer =
+          setTimeout(() => {
+            this.wipe().catch(/* istanbul ignore next */() => 1);
+          }, this._wipeInterval);
+      this._wipeTimer.unref();
     }
+    if ((this._client.status !== 'ready')) {
+      await new Promise(resolve => {
+        this._client.once('ready', resolve);
+      });
+    }
+    if (this._timeDiff == null)
+      await this._syncTime(this._client);
+    return this._client;
+  }
 
 }
