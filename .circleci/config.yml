@@ -36,6 +36,7 @@ jobs:
         type: string
     docker:
       - image: cimg/node:<< parameters.version >>
+      - image: cimg/redis:7.2.5
     environment:
       NODE_ENV: test
     steps:
