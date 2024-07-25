@@ -12,16 +12,10 @@
     "type": "git",
     "url": "https://github.com/panates/redisess.git"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "keywords": [
-    "javascript",
-    "redis",
-    "node-redis",
-    "ioredis",
-    "session",
-    "manager"
-  ],
+  "type": "module",
+  "main": "./cjs/index.js",
+  "module": "./esm/index.js",
+  "types": "typings/index.d.ts",
   "devDependencies": {
     "@panates/eslint-config": "^1.0.9",
     "@panates/eslint-config-ts": "^1.0.9",
@@ -39,16 +33,6 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.5.4"
   },
-  "engines": {
-    "node": ">=16.0"
-  },
-  "files": [
-    "cjs/",
-    "esm/",
-    "typings/",
-    "LICENSE",
-    "README.md"
-  ],
   "scripts": {
     "clean": "npm run clean:src && npm run clean:dist",
     "clean:dist": "rimraf build coverage",
@@ -67,5 +51,23 @@
     "cover": "jest --runInBand --detectOpenHandles --coverage",
     "precitest": "rimraf coverage",
     "citest": "jest --coverage --coverageReporters=lcov"
-  }
+  },
+  "engines": {
+    "node": ">=16.0"
+  },
+  "files": [
+    "cjs/",
+    "esm/",
+    "typings/",
+    "LICENSE",
+    "README.md"
+  ],
+  "keywords": [
+    "javascript",
+    "redis",
+    "node-redis",
+    "ioredis",
+    "session",
+    "manager"
+  ]
 }
