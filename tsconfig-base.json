@@ -1,18 +1,6 @@
 {
+  "extends": "@panates/tsconfig/node.json",
   "compilerOptions": {
-    "incremental": false,
-    "module": "commonjs",
-    "target": "es2017",
-    "declaration": true,
-    "moduleResolution": "Node",
-    "noImplicitAny": false,
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "sourceMap": true,
-    "noUnusedLocals": false,
-    "removeComments": false,
-    "noLib": false,
-    "strict": true,
-    "strictNullChecks": true
+    "types": ["node", "jest"]
   }
 }

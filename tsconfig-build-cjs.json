@@ -1,0 +1,9 @@
+{
+  "extends": ["./tsconfig-base.json", "@panates/tsconfig/build.json"],
+  "compilerOptions": {
+    "declaration": false,
+    "outDir": "build/cjs",
+    "module": "CommonJS"
+  },
+  "include": ["src"]
+}

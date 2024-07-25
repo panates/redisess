@@ -1,363 +1,367 @@
-/* eslint-disable */
-import './support/env';
-import assert from 'assert';
-import {SessionManager} from '../src';
-import promisify from 'putil-promisify';
+import './_support/env';
 import Redis from 'ioredis';
+import promisify from 'putil-promisify';
+import { SessionManager } from '../src';
 
-describe('SessionManager', function () {
+describe('SessionManager', () => {
+  let client: Redis;
+  let sm: SessionManager;
+  const sessionIds = [];
+  let _now: number;
 
-    let client: Redis;
-    let sm: SessionManager;
-    let sessionIds = [];
-    let _now;
+  beforeAll(done => {
+    client = new Redis();
+    const callDone = e => {
+      client.removeListener('ready', done);
+      client.removeListener('error', done);
+      done(e);
+    };
+    client.once('ready', callDone);
+    client.once('error', callDone);
+  });
 
-    before((done) => {
-        client = new Redis();
-        const callDone = (e?) => {
-            client.removeListener('ready', done);
-            client.removeListener('error', done);
-            done(e);
-        };
-        client.once('ready', callDone);
-        client.once('error', callDone);
+  beforeAll(async () => {
+    sm = new SessionManager(client, {
+      namespace: 'smtest',
+      wipeInterval: 60000,
+      additionalFields: ['peerIp', 'userAgent'],
     });
-    
-    before(async function () {
-        sm = new SessionManager(client, {
-            namespace: 'smtest',
-            wipeInterval: 60000,
-            additionalFields: ['peerIp', 'userAgent']
-        });
-        await sm.killAll();
-        await promisify.fromCallback(cb => client.script('FLUSH', cb));
-    });
+    await sm.killAll();
+    await promisify.fromCallback(cb => client.script('FLUSH', cb));
+  });
 
-    after(async () => {
-        await client.disconnect();
-    });
-    
-    it('should constructor validate arguments', function () {
-        assert.throws(() => {
-            // @ts-ignore
-            new SessionManager();
-        }, /You must provide redis instance/);
-        // @ts-ignore
-        new SessionManager(client, 'myapp');
-    });
+  afterAll(() => client.disconnect());
 
-    it('should set namespace while construct', function () {
-        const sm = new SessionManager(client, {namespace: 'abc'});
-        assert.strictEqual(sm.namespace, 'abc');
-    });
+  it('should constructor validate arguments', () => {
+    // @ts-ignore
+    expect(() => new SessionManager()).toThrow(
+      'You must provide redis instance',
+    );
 
-    it('should set ttl while construct', function () {
-        const sm = new SessionManager(client, {ttl: 60});
-        assert.strictEqual(sm.ttl, 60);
-    });
+    expect(() => new SessionManager(client, {})).not.toThrow();
+  });
 
-    it('should create() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.create(),
-            /You must provide userId/);
-    });
+  it('should set namespace while construct', () => {
+    const sm2 = new SessionManager(client, { namespace: 'abc' });
+    expect(sm2.namespace).toEqual('abc');
+  });
 
-    it('should countForUser() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.countForUser(),
-            /You must provide userId/);
-    });
+  it('should set ttl while construct', () => {
+    const sm2 = new SessionManager(client, { ttl: 60 });
+    expect(sm2.ttl).toEqual(60);
+  });
 
-    it('should get() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.get(),
-            /You must provide sessionId/);
-    });
+  it('should create() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.create(),
+    ).rejects.toThrow('You must provide userId');
+  });
 
-    it('should getUserSessions() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.getUserSessions(),
-            /You must provide userId/);
-    });
+  it('should countForUser() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.countForUser(),
+    ).rejects.toThrow('You must provide userId');
+  });
 
-    it('should getOldestUserSession() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.getOldestUserSession(),
-            /You must provide userId/);
-    });
+  it('should get() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.get(),
+    ).rejects.toThrow('You must provide sessionId');
+  });
 
-    it('should exists() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.exists(),
-            /You must provide sessionId/);
-    });
+  it('should getUserSessions() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.getUserSessions(),
+    ).rejects.toThrow('You must provide userId');
+  });
 
-    it('should kill() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.kill(),
-            /You must provide sessionId/);
-    });
+  it('should getOldestUserSession() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.getOldestUserSession(),
+    ).rejects.toThrow('You must provide userId');
+  });
 
-    it('should killUser() validate arguments', function () {
-        // @ts-ignore
-        return assert.rejects(() => sm.killUser(),
-            /You must provide userId/);
-    });
+  it('should exists() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.exists(),
+    ).rejects.toThrow('You must provide sessionId');
+  });
 
-    it('should now() return redis server time', async function () {
-        const n = await sm.now();
-        assert.strictEqual(typeof n, 'number');
-        _now = n;
-    });
+  it('should kill() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.kill(),
+    ).rejects.toThrow('You must provide sessionId');
+  });
 
-    it('should create session', async function () {
-        let t = _now - 10;
-        for (const [i, k] of [1, 1, 1, 2, 3, 2, 1, 4, 2, 5].entries()) {
-            // @ts-ignore
-            sm._now = () => (t - (i * 10));
-            const sess = await sm.create('user' + k, {
-                ttl: 50,
-                peerIp: '192.168.0.' + (11 - i)
-            });
-            // @ts-ignore
-            delete sm._now;
-            const j = i * 10 + 10;
-            assert(sess);
-            assert(sess.sessionId);
-            assert.strictEqual(sess.userId, 'user' + k);
-            assert.strictEqual(sess.peerIp, '192.168.0.' + (11 - i));
-            assert(sess.idle >= j && sess.idle < j + 10);
-            assert(sess.expiresIn <= 50 - j && sess.expiresIn > 50 - j - 10);
-            sessionIds.push(sess.sessionId);
-        }
-    });
+  it('should killUser() validate arguments', async () => {
+    await expect(
+      // @ts-ignore
+      () => sm.killUser(),
+    ).rejects.toThrow('You must provide userId');
+  });
 
-    it('should count() return session count', async function () {
-        const c = await sm.count();
-        assert.strictEqual(c, 10);
-    });
+  it('should now() return redis server time', async () => {
+    const n = await sm.now();
+    expect(typeof n).toEqual('number');
+    _now = n;
+  });
 
-    it('should count() return active session count which active within given time', async function () {
-        const c = await sm.count(40);
-        assert.strictEqual(c, 4);
-    });
+  it('should create session', async () => {
+    const t = _now - 10;
+    for (const [i, k] of [1, 1, 1, 2, 3, 2, 1, 4, 2, 5].entries()) {
+      // @ts-ignore
+      sm._now = () => t - i * 10;
+      const sess = await sm.create('user' + k, {
+        ttl: 50,
+        peerIp: '192.168.0.' + (11 - i),
+      });
+      // @ts-ignore
+      delete sm._now;
+      const j = i * 10 + 10;
+      expect(sess).toBeDefined();
+      expect(sess.sessionId).toBeDefined();
+      expect(sess.userId).toStrictEqual('user' + k);
+      expect(sess.peerIp).toStrictEqual('192.168.0.' + (11 - i));
+      expect(sess.idle).toBeGreaterThanOrEqual(j);
+      expect(sess.idle).toBeLessThan(j + 10);
+      expect(sess.expiresIn).toBeLessThanOrEqual(50 - j);
+      expect(sess.expiresIn).toBeGreaterThan(50 - j - 10);
+      sessionIds.push(sess.sessionId);
+    }
+  });
 
-    it('should countForUser() return session count of single user', async function () {
-        const c = await sm.countForUser('user1')
-        assert.strictEqual(c, 4);
-    });
+  it('should count() return session count', async () => {
+    const c = await sm.count();
+    expect(c).toStrictEqual(10);
+  });
 
-    it('should countForUser() return active session count of user which active within given time', async function () {
-        const c = await sm.countForUser('user1', 40)
-        assert.strictEqual(c, 3);
-    });
+  it('should count() return active session count which active within given time', async () => {
+    const c = await sm.count(40);
+    expect(c).toStrictEqual(4);
+  });
 
-    it('should getAllSessions() return all session ids', async function () {
-        // @ts-ignore
-        const sessions = await sm.getAllSessions()
-        assert(sessions);
-        assert.strictEqual(Object.keys(sessions).length, 10);
-    });
+  it('should countForUser() return session count of single user', async () => {
+    const c = await sm.countForUser('user1');
+    expect(c).toStrictEqual(4);
+  });
 
-    it('should getAllSessions() return all session ids  which active within given time', async function () {
-        const sessions = await sm.getAllSessions(20)
-        assert(sessions);
-        assert.strictEqual(Object.keys(sessions).length, 2);
-    });
+  it('should countForUser() return active session count of user which active within given time', async () => {
+    const c = await sm.countForUser('user1', 40);
+    expect(c).toStrictEqual(3);
+  });
 
-    it('should getUserSessions() return all session ids of user', async function () {
-        const sessions = await sm.getUserSessions('user1')
-        assert(sessions);
-        assert.strictEqual(Object.keys(sessions).length, 4);
-    });
+  it('should getAllSessions() return all session ids', async () => {
+    const sessions = await sm.getAllSessions();
+    expect(sessions).toBeDefined();
+    expect(Object.keys(sessions).length).toEqual(10);
+  });
 
-    it('should getUserSessions() return all session ids of user which active within given time', async function () {
-        const sessions = await sm.getUserSessions('user1', 50)
-        assert(sessions);
-        assert.strictEqual(Object.keys(sessions).length, 3);
-    });
+  it('should getAllSessions() return all session ids  which active within given time', async () => {
+    const sessions = await sm.getAllSessions(20);
+    expect(sessions).toBeDefined();
+    expect(Object.keys(sessions).length).toEqual(2);
+  });
 
-    it('should getOldestUserSession() return oldest session of user without updating idle time', async function () {
-        const sess = await sm.getOldestUserSession('user1', true)
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.userId, 'user1');
-        assert.strictEqual(sess.peerIp, '192.168.0.5');
-        assert.strictEqual(sess.idle, 70);
-    });
+  it('should getUserSessions() return all session ids of user', async () => {
+    const sessions = await sm.getUserSessions('user1');
+    expect(sessions).toBeDefined();
+    expect(Object.keys(sessions).length).toEqual(4);
+  });
 
-    it('should getOldestUserSession() return oldest session of user', async function () {
-        const sess = await sm.getOldestUserSession('user1')
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.userId, 'user1');
-        assert.strictEqual(sess.peerIp, '192.168.0.5');
-        assert.strictEqual(sess.idle, 0);
-    });
+  it('should getUserSessions() return all session ids of user which active within given time', async () => {
+    const sessions = await sm.getUserSessions('user1', 50);
+    expect(sessions).toBeDefined();
+    expect(Object.keys(sessions).length).toEqual(3);
+  });
 
-    it('should getAllUsers() return all user ids', async function () {
-        const users = await sm.getAllUsers();
-        assert(users);
-        assert.strictEqual(Object.keys(users).length, 5);
-    });
+  it('should getOldestUserSession() return oldest session of user without updating idle time', async () => {
+    const session = await sm.getOldestUserSession('user1', true);
+    expect(session).toBeDefined();
+    expect(session.sessionId).toBeDefined();
+    expect(session.userId).toEqual('user1');
+    expect(session.peerIp).toEqual('192.168.0.5');
+    expect(session.idle).toEqual(70);
+  });
 
-    it('should getAllUsers() return all user ids which active within given time', async function () {
-        const sessions = await sm.getAllUsers(50);
-        assert(sessions);
-        assert.strictEqual(Object.keys(sessions).length, 2);
-    });
+  it('should getOldestUserSession() return oldest session of user', async () => {
+    const session = await sm.getOldestUserSession('user1');
+    expect(session).toBeDefined();
+    expect(session.sessionId).toBeDefined();
+    expect(session.userId).toEqual('user1');
+    expect(session.peerIp).toEqual('192.168.0.5');
+    expect(session.idle).toEqual(0);
+  });
 
-    it('should create session with default options', async function () {
-        // @ts-ignore
-        sm._now = () => _now - 200;
-        const sess = await sm.create('user7');
-        // @ts-ignore
-        delete sm._now;
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.ttl, 30 * 60);
-    });
+  it('should getAllUsers() return all user ids', async () => {
+    const users = await sm.getAllUsers();
+    expect(Object.keys(users).length).toEqual(5);
+  });
 
-    it('should get session without updating idle time', async function () {
-        const sess = await sm.get(sessionIds[0], true);
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.userId, 'user1');
-        assert.strictEqual(sess.peerIp, '192.168.0.11');
-        assert(sess.idle > 0);
-    });
+  it('should getAllUsers() return all user ids which active within given time', async () => {
+    const users = await sm.getAllUsers(50);
+    expect(Object.keys(users).length).toEqual(2);
+  });
 
-    it('should get session with updating idle time (default)', async function () {
-        const sess = await sm.get(sessionIds[0])
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.userId, 'user1');
-        assert.strictEqual(sess.peerIp, '192.168.0.11');
-        assert.strictEqual(sess.idle, 0);
-    });
+  it('should create session with default options', async () => {
+    // @ts-ignore
+    sm._now = () => _now - 200;
+    const session = await sm.create('user7');
+    // @ts-ignore
+    delete sm._now;
+    expect(session).toBeDefined();
+    expect(session.sessionId).toBeDefined();
+    expect(session.ttl).toEqual(30 * 60);
+  });
 
-    it('should exists() check if session exists', async function () {
-        let b = await sm.exists(sessionIds[0]);
-        assert(b);
-        b = await sm.exists('unknown');
-        assert(!b);
-    });
+  it('should get session without updating idle time', async () => {
+    const session = await sm.get(sessionIds[0], true);
+    expect(session).toBeDefined();
+    expect(session.sessionId).toBeDefined();
+    expect(session.userId).toEqual('user1');
+    expect(session.peerIp).toEqual('192.168.0.11');
+    expect(session.idle).toBeGreaterThan(0);
+  });
 
-    it('should set values to session', async function () {
-        const sess = await sm.get(sessionIds[sessionIds.length - 1])
-        const r = await sess.set('val1', 123);
-        assert.strictEqual(r, 1);
-    });
+  it('should get session with updating idle time (default)', async () => {
+    const session = await sm.get(sessionIds[0]);
+    expect(session).toBeDefined();
+    expect(session.sessionId).toBeDefined();
+    expect(session.userId).toEqual('user1');
+    expect(session.peerIp).toEqual('192.168.0.11');
+    expect(session.idle).toEqual(0);
+  });
 
-    it('should set map of values to session', async function () {
-        const session = await sm.get(sessionIds[sessionIds.length - 1]);
-        const r = await session.set({
-            val2: '234',
-            val3: 'abc',
-            val4: new Date(0),
-            val5: Buffer.from('Hello World'),
-            val6: {a: 1, b: '2', c: 3.3}
-        });
-        assert.strictEqual(r, 5);
-    });
+  it('should exists() check if session exists', async () => {
+    let b = await sm.exists(sessionIds[0]);
+    expect(b).toBeTruthy();
+    b = await sm.exists('unknown');
+    expect(b).not.toBeTruthy();
+  });
 
-    it('should get values from session', async function () {
-        const session = await sm.get(sessionIds[sessionIds.length - 1]);
-        const v = await session.get('val1');
-        assert.strictEqual(v, 123);
-    });
+  it('should set values to session', async () => {
+    const sess = await sm.get(sessionIds[sessionIds.length - 1]);
+    const r = await sess.set('val1', 123);
+    expect(r).toStrictEqual(1);
+  });
 
-    it('should get array of values from session', async function () {
-        const session = await sm.get(sessionIds[sessionIds.length - 1]);
-        const v = await session.get(['val1', 'val2', 'val3', 'val4', 'val5', 'val6']);
-        assert.deepStrictEqual(v,
-            [123, '234', 'abc',
-                new Date(0),
-                Buffer.from('Hello World'),
-                {a: 1, b: '2', c: 3.3}
-            ]
-        );
+  it('should set map of values to session', async () => {
+    const session = await sm.get(sessionIds[sessionIds.length - 1]);
+    const r = await session.set({
+      val2: '234',
+      val3: 'abc',
+      val4: new Date(0),
+      val5: Buffer.from('Hello World'),
+      val6: { a: 1, b: '2', c: 3.3 },
     });
+    expect(r).toStrictEqual(5);
+  });
 
-    it('should get map of values from session', async function () {
-        const session = await sm.get(sessionIds[sessionIds.length - 1]);
-        const v = await session.get({val2: 0, val3: 0, val4: 0});
-        assert.deepStrictEqual(v, {
-            val2: '234',
-            val3: 'abc',
-            val4: new Date(0)
-        });
+  it('should get values from session', async () => {
+    const session = await sm.get(sessionIds[sessionIds.length - 1]);
+    const v = await session.get('val1');
+    expect(v).toStrictEqual(123);
+  });
+
+  it('should get array of values from session', async () => {
+    const session = await sm.get(sessionIds[sessionIds.length - 1]);
+    const v = await session.get([
+      'val1',
+      'val2',
+      'val3',
+      'val4',
+      'val5',
+      'val6',
+    ]);
+    expect(v).toEqual([
+      123,
+      '234',
+      'abc',
+      new Date(0),
+      Buffer.from('Hello World'),
+      { a: 1, b: '2', c: 3.3 },
+    ]);
+  });
+
+  it('should get map of values from session', async () => {
+    const session = await sm.get(sessionIds[sessionIds.length - 1]);
+    const v = await session.get({ val2: 0, val3: 0, val4: 0 });
+    expect(v).toEqual({
+      val2: '234',
+      val3: 'abc',
+      val4: new Date(0),
     });
+  });
 
-    it('should kill() remove session', async function () {
-        const sessionId = sessionIds.pop();
-        await sm.kill(sessionId);
-        const b = await await sm.exists(sessionId);
-        assert(!b);
-        const sess = await sm.get(sessionId);
-        assert(!sess);
-    });
+  it('should kill() remove session', async () => {
+    const sessionId = sessionIds.pop();
+    await sm.kill(sessionId);
+    const b = await sm.exists(sessionId);
+    expect(b).not.toBeTruthy();
+    const sess = await sm.get(sessionId);
+    expect(sess).not.toBeDefined();
+  });
 
-    it('should killUser() remove all sessions of the user', async function () {
-        let sessionId;
-        const ids = await sm.getUserSessions('user4');
-        sessionId = ids[0];
-        let b = await sm.exists(sessionId);
-        assert.strictEqual(b, true);
-        await sm.killUser('user4');
-        b = await sm.exists(sessionId);
-        assert.strictEqual(b, false);
-    });
+  it('should killUser() remove all sessions of the user', async () => {
+    const ids = await sm.getUserSessions('user4');
+    const sessionId = ids[0];
+    let b = await sm.exists(sessionId);
+    expect(b).toBeTruthy();
+    await sm.killUser('user4');
+    b = await sm.exists(sessionId);
+    expect(b).not.toBeTruthy();
+  });
 
-    it('should wipe expired sessions', async function () {
-        await sm.wipe();
-        const c = await sm.count();
-        assert.strictEqual(c, 6);
-    });
+  it('should wipe expired sessions', async () => {
+    await sm.wipe();
+    const c = await sm.count();
+    expect(c).toStrictEqual(6);
+  });
 
-    it('should killAll() remove all sessions of the user', async function () {
-        let c = await sm.count();
-        assert(c > 0);
-        await sm.killAll();
-        c = await sm.count();
-        assert.strictEqual(c, 0);
-    });
+  it('should killAll() remove all sessions of the user', async () => {
+    let c = await sm.count();
+    expect(c).toBeGreaterThan(0);
+    await sm.killAll();
+    c = await sm.count();
+    expect(c).toEqual(0);
+  });
 
-    it('should create immortal session', async function () {
-        // @ts-ignore
-        sm._now = () => _now - 200;
-        let sid;
-        const sess = await sm.create('user6', {ttl: 0});
-        // @ts-ignore
-        delete sm._now;
-        assert(sess);
-        assert(sess.sessionId);
-        assert.strictEqual(sess.ttl, 0);
-        assert.strictEqual(sess.expiresIn, 0);
-        sid = sess.sessionId;
-        const sess2 = await sm.get(sid);
-        assert(sess2);
-    });
+  it('should create immortal session', async () => {
+    // @ts-ignore
+    sm._now = () => _now - 200;
+    const session = await sm.create('user6', { ttl: 0 });
+    // @ts-ignore
+    delete sm._now;
+    expect(session).toBeDefined();
+    expect(session.sessionId).toBeDefined();
+    expect(session.ttl).toStrictEqual(0);
+    expect(session.expiresIn).toStrictEqual(0);
+    const sess2 = await sm.get(session.sessionId);
+    expect(sess2).toBeDefined();
+  });
 
-    it('should wipe periodically', function (done) {
-        this.slow(500);
-        // @ts-ignore
-        sm._wipeInterval = 1;
-        const oldWipe = sm.wipe;
-        let k = 0;
-        sm.wipe = () => {
-            k++;
-            return oldWipe.call(sm);
-        };
-        sm.wipe();
-        setTimeout(() => {
-            // @ts-ignore
-            sm._wipeInterval = 6000;
-            delete sm.wipe;
-            if (k > 5)
-                return done();
-            done(new Error('Failed'));
-        }, 100).unref();
-    });
-
+  it('should wipe periodically', done => {
+    // @ts-ignore
+    sm._wipeInterval = 1;
+    const oldWipe = sm.wipe;
+    let k = 0;
+    sm.wipe = () => {
+      k++;
+      return oldWipe.call(sm);
+    };
+    sm.wipe().catch(() => undefined);
+    setTimeout(() => {
+      // @ts-ignore
+      sm._wipeInterval = 6000;
+      delete sm.wipe;
+      if (k > 5) return done();
+      done(new Error('Failed'));
+    }, 100).unref();
+  });
 });

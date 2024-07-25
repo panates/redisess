@@ -1,5 +1,5 @@
-import promisify from 'putil-promisify';
 import { Cluster, Redis } from 'ioredis';
+import promisify from 'putil-promisify';
 
 export class RedisScript {
   private readonly _src: string;
@@ -13,14 +13,12 @@ export class RedisScript {
   }
 
   async execute(client: Redis | Cluster, ...args): Promise<boolean> {
-    if (!this._sha)
-      await this._loadScript(client);
+    if (!this._sha) await this._loadScript(client);
     try {
       return await this._execute(client, ...args);
     } catch (err) {
       /* istanbul ignore next */
-      if (!String(err).includes('NOSCRIPT'))
-        throw err;
+      if (!String(err).includes('NOSCRIPT')) throw err;
       // Retry
       this._sha = '';
       return await this._execute(client, ...args);
@@ -38,16 +36,16 @@ export class RedisScript {
       prms.push(args[i] == null ? '' : args[i]);
     }
     return !!(await promisify.fromCallback(cb =>
-        client.evalsha(this._sha, m, ...prms, cb)));
+      client.evalsha(this._sha, m, ...prms, cb),
+    ));
   }
 
   private async _loadScript(client: Redis | Cluster): Promise<void> {
     const resp = await promisify.fromCallback(cb =>
-        client.script('LOAD', this._src, cb));
+      client.script('LOAD', this._src, cb),
+    );
     /* istanbul ignore next */
-    if (!resp)
-      throw new Error('Unable to load redis script in to redis cache');
+    if (!resp) throw new Error('Unable to load redis script in to redis cache');
     this._sha = resp;
   }
-
 }
