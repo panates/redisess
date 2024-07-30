@@ -1,2 +1,2 @@
-export * from './Session';
-export * from './SessionManager';
+export * from './session.js';
+export * from './session-manager.js';

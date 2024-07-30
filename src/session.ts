@@ -1,22 +1,9 @@
-import { Redis } from 'ioredis';
 import promisify from 'putil-promisify';
 import util from 'util';
 import zlib from 'zlib';
-import { RedisScript } from './RedisScript';
-import { SessionManager } from './SessionManager';
+import { Backend } from './backend.js';
 
 const unzip = util.promisify<Buffer, Buffer>(zlib.unzip);
-
-interface SessionManagerAccess {
-  _ns?: string;
-  _additionalFields: string[];
-  _killScript: RedisScript;
-  _writeScript: RedisScript;
-
-  _now(): number;
-
-  _getClient(): Promise<Redis>;
-}
 
 export namespace Session {
   export interface Options {
@@ -27,7 +14,7 @@ export namespace Session {
 }
 
 export class Session {
-  private readonly _manager: SessionManagerAccess;
+  private readonly _backend: Backend;
   private readonly _sessionId: string;
   private _userId: string;
   private _ttl: number;
@@ -36,15 +23,15 @@ export class Session {
 
   /**
    *
-   * @param {SessionManager} manager
+   * @param {Backend} backend
    * @param {Object} opts
    * @param {string} opts.sessionId
    * @param {string} [opts.userId]
    * @param {number} [opts.ttl]
    * @constructor
    */
-  constructor(manager: SessionManager, opts: Session.Options) {
-    this._manager = manager as unknown as SessionManagerAccess;
+  constructor(backend: Backend, opts: Session.Options) {
+    this._backend = backend;
     this._sessionId = opts.sessionId;
     this._userId = opts.userId || '';
     this._ttl = opts.ttl || 0;
@@ -103,7 +90,7 @@ export class Session {
    * @return {number}
    */
   get expiresIn(): number {
-    return this._expires ? this._expires - this._manager._now() : 0;
+    return this._expires ? this._expires - this._backend.now() : 0;
   }
 
   get valid(): boolean {
@@ -116,7 +103,7 @@ export class Session {
    * @return {number}
    */
   get idle(): number {
-    return this._manager._now() - this.lastAccess;
+    return this._backend.now() - this.lastAccess;
   }
 
   /**
@@ -125,13 +112,13 @@ export class Session {
    * @return {Promise}
    */
   async read(): Promise<void> {
-    const manager = this._manager;
-    const sessKey = manager._ns + ':sess_' + this.sessionId;
-    const client = await manager._getClient();
+    const backend = this._backend;
+    const sessKey = backend.ns + ':sess_' + this.sessionId;
+    const client = await backend.getClient();
     const args = ['us', 'la', 'ex', 'ttl'];
     /* istanbul ignore else */
-    if (manager._additionalFields) {
-      for (const key of manager._additionalFields.keys()) args.push('f' + key);
+    if (backend.additionalFields) {
+      for (const key of backend.additionalFields.keys()) args.push('f' + key);
     }
     const resp = await promisify.fromCallback(cb =>
       client.hmget(sessKey, ...args, cb),
@@ -141,8 +128,8 @@ export class Session {
     this._expires = Number(resp[2]) || 0;
     this._ttl = Number(resp[3]) || 0;
     /* istanbul ignore else */
-    if (manager._additionalFields) {
-      for (const [i, f] of manager._additionalFields.entries()) {
+    if (backend.additionalFields) {
+      for (const [i, f] of backend.additionalFields.entries()) {
         this[f] = resp[4 + i];
       }
     }
@@ -154,9 +141,9 @@ export class Session {
    * @param {string|Array<String>|Object<String,*>} key
    * @return {Promise<*>}
    */
-  async get(key): Promise<any> {
-    const manager = this._manager;
-    const sessKey = manager._ns + ':sess_' + this.sessionId;
+  async get(key: any): Promise<any> {
+    const backend = this._backend;
+    const sessKey = backend.ns + ':sess_' + this.sessionId;
     const fromTyped = async v => {
       let x = v.substring(1);
       switch (v[0]) {
@@ -177,7 +164,7 @@ export class Session {
       }
       return x;
     };
-    const client = await manager._getClient();
+    const client = await backend.getClient();
 
     // Prepare keys to query
     let keys;
@@ -223,9 +210,9 @@ export class Session {
    */
   async set(key: string, value: any): Promise<number>;
   async set(arg0, arg1?): Promise<number> {
-    const manager = this._manager;
-    const sessKey = manager._ns + ':sess_' + this.sessionId;
-    const client = await manager._getClient();
+    const backend = this._backend;
+    const sessKey = backend.ns + ':sess_' + this.sessionId;
+    const client = await backend.getClient();
     const values =
       typeof arg0 === 'object'
         ? this._prepareUserData(arg0)
@@ -246,12 +233,12 @@ export class Session {
    * @return {Promise}
    */
   async kill(): Promise<void> {
-    const manager = this._manager;
-    const client = await manager._getClient();
+    const backend = this._backend;
+    const client = await backend.getClient();
     const { sessionId, userId } = this;
-    const resp = await manager._killScript.execute(
+    const resp = await backend.killScript.execute(
       client,
-      manager._ns,
+      backend.ns,
       sessionId,
       userId,
     );
@@ -267,19 +254,19 @@ export class Session {
    * @private
    */
   async write(): Promise<void> {
-    const manager = this._manager;
-    const client = await manager._getClient();
-    this._lastAccess = manager._now();
+    const backend = this._backend;
+    const client = await backend.getClient();
+    this._lastAccess = backend.now();
     this._expires = this._ttl ? this._lastAccess + this._ttl : 0;
 
     const { sessionId, userId, lastAccess, expires, ttl } = this;
-    const args = [manager._ns, lastAccess, userId, sessionId, expires, ttl];
+    const args = [backend.ns, lastAccess, userId, sessionId, expires, ttl];
     /* istanbul ignore else */
-    if (manager._additionalFields) {
-      for (const f of manager._additionalFields) args.push(this[f] || null);
+    if (backend.additionalFields) {
+      for (const f of backend.additionalFields) args.push(this[f] || null);
     }
 
-    const resp = await manager._writeScript.execute(client, ...args);
+    const resp = await backend.writeScript.execute(client, ...args);
     /* istanbul ignore next */
     if (!resp) {
       throw new Error('Unable to store session due to an unknown error');

@@ -1,8 +1,8 @@
 import crypto from 'crypto';
 import Redis, { Cluster } from 'ioredis';
 import promisify from 'putil-promisify';
-import { RedisScript } from './RedisScript';
-import { Session } from './Session';
+import { Backend } from './backend';
+import { Session } from './session.js';
 
 export namespace SessionManager {
   export interface Options {
@@ -20,17 +20,8 @@ export type ResultSession = Session & Record<string, any>;
  * @class
  */
 export class SessionManager {
-  private readonly _client: Redis | Cluster;
-  private readonly _ns?: string;
-  private readonly _ttl?: number;
-  private readonly _additionalFields?: string[];
-  private readonly _killScript: RedisScript;
-  private readonly _writeScript: RedisScript;
-  private readonly _wipeScript: RedisScript;
-  private readonly _killAllScript: RedisScript;
-  private _wipeTimer?: NodeJS.Timeout;
-  private _wipeInterval?: number;
-  private _timeDiff: number;
+  private readonly _backend: Backend;
+  private readonly _additionalFields: string[];
 
   /**
    *
@@ -42,102 +33,24 @@ export class SessionManager {
    * @param {Array<String>} [props.additionalFields]
    */
   constructor(client: Redis | Cluster, props: SessionManager.Options = {}) {
+    this._backend = new Backend(client, props);
     if (!(client && typeof client.hmset === 'function')) {
       throw new TypeError('You must provide redis instance');
     }
-    this._client = client;
-    this._additionalFields = props.additionalFields
-      ? (Object.freeze(props.additionalFields) as string[])
-      : undefined;
-    this._ns = props.namespace || 'sessions';
-    this._ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : 30 * 60;
-    this._timeDiff = 0;
-    this._wipeInterval = props.wipeInterval || 1000;
+    this._additionalFields = [...(props.additionalFields || [])];
     client.once('close', () => this.quit());
+  }
 
-    this._killScript = new RedisScript(`
-    local prefix = ARGV[1]
-    local sessionId = ARGV[2]
-    local userId = ARGV[3]
-    
-    redis.call("zrem", prefix..":ACTIVITY", sessionId)          
-    redis.call("zrem", prefix..":EXPIRES", sessionId)
-    redis.call("zrem", prefix..":user_"..userId, sessionId)
-    redis.call("del", prefix..":sess_"..sessionId)        
-    if (redis.call("zcount", prefix..":user_"..userId, "+inf", "-inf")>0) then
-      redis.call("zrem", prefix..":USERS", userId)
-    end          
-    return 1        
-    `);
-
-    let s = '';
-    if (props.additionalFields) {
-      for (let i = 0; i < props.additionalFields.length; i++) {
-        s += ', "f' + i + '", ARGV[' + (7 + i) + ']';
-      }
-    }
-
-    this._writeScript = new RedisScript(
-      `
-    local prefix = ARGV[1]
-    local lastAccess = tonumber(ARGV[2])
-    local userId = ARGV[3]
-    local sessionId = ARGV[4]
-    local expires = tonumber(ARGV[5])
-    local ttl = tonumber(ARGV[6])
-    
-    redis.call("zadd", prefix..":USERS", lastAccess, userId) 
-    redis.call("zadd", prefix..":ACTIVITY", lastAccess, sessionId)          
-    redis.call("zadd", prefix..":user_"..userId, lastAccess, sessionId)
-    redis.call("hmset", prefix..":sess_"..sessionId, "us", userId, "la", lastAccess, "ex", expires, "ttl", ttl` +
-        s +
-        `)                       
-    if (expires > 0) then
-      redis.call("zadd", prefix..":EXPIRES", expires, sessionId)
-    else
-      redis.call("zrem", prefix..":EXPIRES", sessionId)
-    end          
-    return 1
-    `,
-    );
-
-    this._wipeScript = new RedisScript(`
-    -- find keys with wildcard
-    local matches = redis.call("zrevrangebyscore", ARGV[1]..":EXPIRES", ARGV[2], "-inf")
-    if unpack(matches) == nil then
-      return 0 
-    end
-    -- Iterate keys
-    for _,key in ipairs(matches) do
-      local userId = redis.call("HGET", ARGV[1]..":sess_"..key, "us")
-      if userId ~= nil then
-        redis.call('zrem', ARGV[1]..":user_"..userId, key)            
-      end
-      redis.call("del", ARGV[1]..":sess_"..key)            
-    end          
-    redis.call("zrem", ARGV[1]..":ACTIVITY", unpack(matches))
-    redis.call("zrem", ARGV[1]..":EXPIRES", unpack(matches))                    
-    `);
-
-    this._killAllScript = new RedisScript(`
-    -- find keys with wildcard
-    local matches = redis.call("keys", ARGV[1]) 
-    --if there are any keys
-    if unpack(matches) ~= nil then
-      --delete all
-      return redis.call("del", unpack(matches)) 
-    else 
-      return 0 --if no keys to delete
-    end
-    `);
+  get additionalFields(): string[] {
+    return this._additionalFields;
   }
 
   get namespace(): string | undefined {
-    return this._ns;
+    return this._backend.ns;
   }
 
   get ttl(): number | undefined {
-    return this._ttl;
+    return this._backend.ttl;
   }
 
   /**
@@ -146,13 +59,13 @@ export class SessionManager {
    * @return {Promise<Number>}
    */
   async count(secs: number = 0): Promise<number> {
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     secs = Number(secs);
-    const prefix = this._ns;
+    const prefix = this._backend.ns;
     const resp = await promisify.fromCallback(cb =>
       client.zcount(
         prefix + ':ACTIVITY',
-        secs ? Math.floor(this._now() - secs) : '-inf',
+        secs ? Math.floor(this._backend.now() - secs) : '-inf',
         '+inf',
         cb,
       ),
@@ -169,11 +82,11 @@ export class SessionManager {
    */
   async countForUser(userId: string, secs: number = 0): Promise<number> {
     if (!userId) throw new TypeError('You must provide userId');
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     secs = Number(secs);
     const resp = await client.zcount(
-      this._ns + ':user_' + userId,
-      secs ? Math.floor(this._now() - secs) : '-inf',
+      this._backend.ns + ':user_' + userId,
+      secs ? Math.floor(this._backend.now() - secs) : '-inf',
       '+inf',
     );
     return Number(resp);
@@ -194,16 +107,16 @@ export class SessionManager {
     if (!userId) throw new TypeError('You must provide userId');
 
     props = props || {};
-    const ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : this._ttl;
+    const ttl = Number(props.ttl) >= 0 ? Number(props.ttl) : this.ttl;
     const sessionId = this._createSessionId();
-    const session = new Session(this, {
+    const session = new Session(this._backend, {
       sessionId,
       userId,
       ttl,
     });
     /* istanbul ignore else */
-    if (this._additionalFields) {
-      for (const f of this._additionalFields) session[f] = props[f];
+    if (this._backend.additionalFields) {
+      for (const f of this._backend.additionalFields) session[f] = props[f];
     }
     await session.write();
     return session;
@@ -221,7 +134,7 @@ export class SessionManager {
     noUpdate: boolean = false,
   ): Promise<ResultSession | undefined> {
     if (!sessionId) throw new TypeError('You must provide sessionId');
-    const session = new Session(this, { sessionId });
+    const session = new Session(this._backend, { sessionId });
     await session.read();
     if (!session.valid) return undefined;
     if (noUpdate) return session;
@@ -236,13 +149,13 @@ export class SessionManager {
    * @return {Promise<Array<String>>}
    */
   async getAllSessions(secs?: number): Promise<string[]> {
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     secs = secs || Number.MAX_SAFE_INTEGER;
     return await promisify.fromCallback(cb =>
       client.zrevrangebyscore(
-        this._ns + ':ACTIVITY',
+        this._backend.ns + ':ACTIVITY',
         '+inf',
-        secs ? Math.floor(this._now() - secs) : '-inf',
+        secs ? Math.floor(this._backend.now() - secs) : '-inf',
         cb,
       ),
     );
@@ -255,13 +168,13 @@ export class SessionManager {
    * @return {Promise<Array<String>>}
    */
   async getAllUsers(secs: number = 0): Promise<string[]> {
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     secs = Number(secs);
     return await promisify.fromCallback(cb =>
       client.zrevrangebyscore(
-        this._ns + ':USERS',
+        this._backend.ns + ':USERS',
         '+inf',
-        secs ? Math.floor(this._now() - secs) : '-inf',
+        secs ? Math.floor(this._backend.now() - secs) : '-inf',
         cb,
       ),
     );
@@ -276,13 +189,13 @@ export class SessionManager {
    */
   async getUserSessions(userId: string, n: number = 0): Promise<string[]> {
     if (!userId) throw new TypeError('You must provide userId');
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     n = Number(n);
     return await promisify.fromCallback(cb =>
       client.zrevrangebyscore(
-        this._ns + ':user_' + userId,
+        this._backend.ns + ':user_' + userId,
         '+inf',
-        n ? Math.floor(this._now() - n) : '-inf',
+        n ? Math.floor(this._backend.now() - n) : '-inf',
         cb,
       ),
     );
@@ -300,9 +213,9 @@ export class SessionManager {
     noUpdate: boolean = false,
   ): Promise<ResultSession | undefined> {
     if (!userId) throw new TypeError('You must provide userId');
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     const sessionId = await promisify.fromCallback(cb =>
-      client.zrevrange(this._ns + ':user_' + userId, -1, -1, cb),
+      client.zrevrange(this._backend.ns + ':user_' + userId, -1, -1, cb),
     );
     if (sessionId && sessionId.length) {
       return await this.get(sessionId[0], noUpdate);
@@ -317,9 +230,9 @@ export class SessionManager {
    */
   async exists(sessionId: string): Promise<Boolean> {
     if (!sessionId) throw new TypeError('You must provide sessionId');
-    const client = await this._getClient();
+    const client = await this._backend.getClient();
     const resp = await promisify.fromCallback(cb =>
-      client.exists(this._ns + ':sess_' + sessionId, cb),
+      client.exists(this._backend.ns + ':sess_' + sessionId, cb),
     );
     return !!Number(resp);
   }
@@ -356,14 +269,14 @@ export class SessionManager {
    * @return {Promise}
    */
   async killAll(): Promise<void> {
-    const client = await this._getClient();
-    await this._killAllScript.execute(client, this._ns + ':*');
+    const client = await this._backend.getClient();
+    await this._backend.killAllScript.execute(client, this._backend.ns + ':*');
   }
 
   async now(): Promise<number> {
-    const client = await this._getClient();
-    await this._syncTime(client);
-    return this._now();
+    const client = await this._backend.getClient();
+    await this._backend.syncTime(client);
+    return this._backend.now();
   }
 
   /* istanbul ignore next */
@@ -371,19 +284,11 @@ export class SessionManager {
    * Stops wipe timer
    */
   quit(): void {
-    if (this._wipeTimer) {
-      clearTimeout(this._wipeTimer);
-      this._wipeTimer = undefined;
-    }
+    this._backend.quit();
   }
 
   async wipe(): Promise<void> {
-    if (this._wipeTimer) {
-      clearTimeout(this._wipeTimer);
-      this._wipeTimer = undefined;
-    }
-    const client = await this._getClient();
-    await this._wipeScript.execute(client, this._ns, this._now());
+    return this._backend.wipe();
   }
 
   // noinspection JSMethodCanBeStatic
@@ -394,34 +299,5 @@ export class SessionManager {
    */
   private _createSessionId(): string {
     return crypto.randomBytes(16).toString('hex');
-  }
-
-  private async _syncTime(client: Redis | Cluster): Promise<number> {
-    const resp = await promisify.fromCallback(cb => client.time(cb));
-    // Synchronize redis server time with local time
-    this._timeDiff =
-      Date.now() / 1000 -
-      Math.floor(Number(resp[0]) + Number(resp[1]) / 1000000);
-    return this._now();
-  }
-
-  private _now(): number {
-    return Math.floor(Date.now() / 1000 + this._timeDiff);
-  }
-
-  private async _getClient(): Promise<Redis | Cluster> {
-    if (!this._wipeTimer) {
-      this._wipeTimer = setTimeout(() => {
-        this.wipe().catch(/* istanbul ignore next */ () => 1);
-      }, this._wipeInterval);
-      this._wipeTimer.unref();
-    }
-    if (this._client.status !== 'ready') {
-      await new Promise(resolve => {
-        this._client.once('ready', resolve);
-      });
-    }
-    if (this._timeDiff == null) await this._syncTime(this._client);
-    return this._client;
   }
 }

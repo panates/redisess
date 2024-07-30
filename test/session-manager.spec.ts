@@ -5,7 +5,7 @@ import { SessionManager } from '../src';
 
 describe('SessionManager', () => {
   let client: Redis;
-  let sm: SessionManager;
+  let sm: any;
   const sessionIds = [];
   let _now: number;
 
@@ -116,14 +116,12 @@ describe('SessionManager', () => {
   it('should create session', async () => {
     const t = _now - 10;
     for (const [i, k] of [1, 1, 1, 2, 3, 2, 1, 4, 2, 5].entries()) {
-      // @ts-ignore
-      sm._now = () => t - i * 10;
+      sm._backend.now = () => t - i * 10;
       const sess = await sm.create('user' + k, {
         ttl: 50,
         peerIp: '192.168.0.' + (11 - i),
       });
-      // @ts-ignore
-      delete sm._now;
+      delete sm._backend.now;
       const j = i * 10 + 10;
       expect(sess).toBeDefined();
       expect(sess.sessionId).toBeDefined();
@@ -210,10 +208,8 @@ describe('SessionManager', () => {
   });
 
   it('should create session with default options', async () => {
-    // @ts-ignore
     sm._now = () => _now - 200;
     const session = await sm.create('user7');
-    // @ts-ignore
     delete sm._now;
     expect(session).toBeDefined();
     expect(session.sessionId).toBeDefined();
@@ -333,10 +329,8 @@ describe('SessionManager', () => {
   });
 
   it('should create immortal session', async () => {
-    // @ts-ignore
     sm._now = () => _now - 200;
     const session = await sm.create('user6', { ttl: 0 });
-    // @ts-ignore
     delete sm._now;
     expect(session).toBeDefined();
     expect(session.sessionId).toBeDefined();
@@ -347,21 +341,21 @@ describe('SessionManager', () => {
   });
 
   it('should wipe periodically', done => {
-    // @ts-ignore
-    sm._wipeInterval = 1;
-    const oldWipe = sm.wipe;
+    const oldWipeInterval = sm._backend.wipeInterval;
+    sm._backend.wipeInterval = 1;
+    const oldWipe = sm._backend.wipe;
     let k = 0;
-    sm.wipe = () => {
+    // @ts-ignore
+    sm._backend.wipe = () => {
       k++;
-      return oldWipe.call(sm);
+      return oldWipe.call(sm._backend);
     };
-    sm.wipe().catch(() => undefined);
     setTimeout(() => {
-      // @ts-ignore
-      sm._wipeInterval = 6000;
-      delete sm.wipe;
+      sm._backend.wipeInterval = oldWipeInterval;
+      delete sm._backend.wipe;
       if (k > 5) return done();
       done(new Error('Failed'));
     }, 100).unref();
+    sm.wipe().catch(() => undefined);
   });
 });
