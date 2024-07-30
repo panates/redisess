@@ -34,7 +34,7 @@ export class Session {
     this._backend = backend;
     this._sessionId = opts.sessionId;
     this._userId = opts.userId || '';
-    this._ttl = opts.ttl || 0;
+    this._ttl = opts.ttl ?? 30 * 60;
     this._lastAccess = 0;
     this._expires = 0;
   }

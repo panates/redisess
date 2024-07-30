@@ -1,6 +1,7 @@
 import './_support/env';
 import Redis from 'ioredis';
 import promisify from 'putil-promisify';
+import { Session } from '../build/typings/index';
 import { SessionManager } from '../src';
 
 describe('SessionManager', () => {
@@ -330,7 +331,7 @@ describe('SessionManager', () => {
 
   it('should create immortal session', async () => {
     sm._now = () => _now - 200;
-    const session = await sm.create('user6', { ttl: 0 });
+    const session: Session = await sm.create('user6', { ttl: 0 });
     delete sm._now;
     expect(session).toBeDefined();
     expect(session.sessionId).toBeDefined();
@@ -338,6 +339,7 @@ describe('SessionManager', () => {
     expect(session.expiresIn).toStrictEqual(0);
     const sess2 = await sm.get(session.sessionId);
     expect(sess2).toBeDefined();
+    await session.kill();
   });
 
   it('should wipe periodically', done => {
