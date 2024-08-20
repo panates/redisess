@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import Redis, { Cluster } from 'ioredis';
 import promisify from 'putil-promisify';
-import { Backend } from './backend';
+import { Backend } from './backend.js';
 import { Session } from './session.js';
 
 export namespace SessionManager {

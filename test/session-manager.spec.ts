@@ -1,8 +1,7 @@
-import './_support/env';
+import './_support/env.js';
 import Redis from 'ioredis';
 import promisify from 'putil-promisify';
-import { Session } from '../build/typings/index';
-import { SessionManager } from '../src';
+import { Session, SessionManager } from '../src/index.js';
 
 describe('SessionManager', () => {
   let client: Redis;

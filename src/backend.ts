@@ -1,13 +1,13 @@
 import Redis, { Cluster } from 'ioredis';
 import promisify from 'putil-promisify';
-import { RedisScript } from './redis-script';
+import { RedisScript } from './redis-script.js';
 import {
   getKillAllScript,
   getKillScript,
   getWipeScript,
   getWriteScript,
-} from './scripts';
-import { Session } from './session';
+} from './scripts.js';
+import { Session } from './session.js';
 
 export namespace SessionManager {
   export interface Options {
