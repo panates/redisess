@@ -1,0 +1,2 @@
+peer: true
+rejectVersion: "/(\\|\\|)|(&&)|>|</"
