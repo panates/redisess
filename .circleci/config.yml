@@ -8,13 +8,6 @@ workflows:
   main:
     jobs:
       - test:
-          version: '16.20'
-          filters:
-            branches:
-              only:
-                - master
-                - dev
-      - test:
           version: '18.17'
           filters:
             branches:
